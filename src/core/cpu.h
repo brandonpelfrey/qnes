@@ -30,7 +30,7 @@ private:
 
 private:
   // CPU State
-  u8 a, x, y;
+  u8 a, x, y, p;
   u16 pc;
   u8 sp;
 
@@ -40,26 +40,29 @@ private:
   // Instruction Execution Pipeline
   // 1) Addressing mode function is called
   //   - Sets addr_abs to actual address to fetch data (if any)
+  //   - If relative addressing is applicable, then addr_rel is computed.
   // 2) Fetch data to 'fetched_data'
   // 3) Execute instruction logic which will act on fetched_data.
-  u16 addr_abs;
+  u8 opcode;
+  u16 addr_rel, addr_abs;
   u8 fetched_data;
   u8 scratch_u8;
 
-  union {
-    u8 S;
-    struct
-    {
-      u8 Carry : 1;
-      u8 Zero : 1;
-      u8 Interrupt : 1;
-      u8 Decimal : 1;
-      u8 SoftwareInterrupt : 1;
-      u8 Unused : 1; // Should always be 1
-      u8 Overflow : 1;
-      u8 Sign : 1;
-    } status;
+  enum StatusFlag
+  {
+    N = 1 << 7,
+    V = 1 << 6,
+    U = 1 << 5, // unused
+    B = 1 << 4, // also unused, but has a name :)
+    D = 1 << 3,
+    I = 1 << 2,
+    Z = 1 << 1,
+    C = 1 << 0
   };
+
+public:
+  void SetFlag(StatusFlag flag, u8 val);
+  u8 GetFlag(StatusFlag flag);
 
 private:
   // Operand addressing modes
@@ -67,13 +70,13 @@ private:
   // These addressing mode functions correspond to the various ways that
   // data can be pulled as operands for any given instruction.
 
-  u8 accumulator();
   u8 addr_implied();
   u8 addr_immediate();
   u8 addr_zeropage();
   u8 addr_zeropage_x();
   u8 addr_zeropage_y();
   u8 addr_absolute();
+  u8 addr_relative();
   u8 addr_absolute_x();
   u8 addr_absolute_y();
   u8 addr_indirect();
@@ -87,6 +90,7 @@ private:
   u8 ASL();
   u8 BIT();
 
+  u8 branchBaseInstruction(bool takeBranch);
   u8 BPL();
   u8 BMI();
   u8 BVC();
@@ -145,7 +149,6 @@ private:
   u8 PLP();
   u8 STX();
   u8 STY();
-
 
 public:
   CPU();

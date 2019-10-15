@@ -1,3 +1,7 @@
+.scons*
+.vscode
+build
+
 # Prerequisites
 *.d
 

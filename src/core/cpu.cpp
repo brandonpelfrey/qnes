@@ -39,7 +39,7 @@ CPU::CPU()
   instructions[0x31] = {"AND", &CPU::AND, &CPU::addr_indirect_y, 5};
 
   // ASL
-  instructions[0x0A] = {"ASL", &CPU::ASL, &CPU::accumulator, 2};
+  instructions[0x0A] = {"ASL", &CPU::ASL, &CPU::addr_implied, 2};
   instructions[0x06] = {"ASL", &CPU::ASL, &CPU::addr_zeropage, 5};
   instructions[0x16] = {"ASL", &CPU::ASL, &CPU::addr_zeropage_x, 6};
   instructions[0x0E] = {"ASL", &CPU::ASL, &CPU::addr_absolute, 6};
@@ -140,7 +140,7 @@ CPU::CPU()
   instructions[0xBC] = {"LDY", &CPU::LDY, &CPU::addr_absolute_x, 4};
 
   // LSR
-  instructions[0x4A] = {"LSR", &CPU::LSR, &CPU::accumulator, 2};
+  instructions[0x4A] = {"LSR", &CPU::LSR, &CPU::addr_implied, 2};
   instructions[0x46] = {"LSR", &CPU::LSR, &CPU::addr_zeropage, 5};
   instructions[0x56] = {"LSR", &CPU::LSR, &CPU::addr_zeropage_x, 6};
   instructions[0x4E] = {"LSR", &CPU::LSR, &CPU::addr_absolute, 6};
@@ -227,22 +227,97 @@ CPU::CPU()
   instructions[0x8C] = {"STY", &CPU::STY, &CPU::addr_absolute, 4};
 }
 
+void CPU::SetFlag(StatusFlag flag, u8 val)
+{
+  u8 new_bit = val ? flag : 0;
+  p = ((~flag) & p) | new_bit;
+  // TODO : Set B/U based on https://wiki.nesdev.com/w/index.php/Status_flags#The_B_flag
+}
+
+u8 CPU::GetFlag(StatusFlag flag)
+{
+  // TODO : Set B/U based on https://wiki.nesdev.com/w/index.php/Status_flags#The_B_flag
+  return (p & flag) ? 1 : 0;
+}
+
 // TODO :)
 
-u8 CPU::ADC() {}
-u8 CPU::AND() {}
+u8 CPU::ADC()
+{
+}
 
-u8 CPU::ASL() {}
-u8 CPU::BIT() {}
+u8 CPU::AND()
+{
+  a &= fetched_data;
+  SetFlag(N, a & 0x80);
+  SetFlag(Z, a == 0);
+  return 0;
+}
 
-u8 CPU::BPL() {}
-u8 CPU::BMI() {}
-u8 CPU::BVC() {}
-u8 CPU::BVS() {}
-u8 CPU::BCC() {}
-u8 CPU::BCS() {}
-u8 CPU::BNE() {}
-u8 CPU::BEQ() {}
+u8 CPU::ASL()
+{
+  u8 temp = fetched_data;
+  SetFlag(C, temp & 0x80);
+  temp = (temp << 1) & 0xFF;
+  SetFlag(N, temp & 0x80);
+  SetFlag(Z, temp == 0);
+
+  if (instructions[opcode].addressing == &CPU::addr_implied)
+    a = temp;
+  else
+    write(addr_abs, temp);
+  return 0;
+}
+
+u8 CPU::BIT()
+{
+  u8 temp = a & fetched_data;
+  SetFlag(N, temp & 0x80);
+  SetFlag(Z, temp == 0);
+  SetFlag(V, temp & 0x40);
+  return 0;
+}
+
+u8 CPU::branchBaseInstruction(bool takeBranch)
+{
+  if (takeBranch)
+  {
+    // If we take the branch, there's an extra cycle.
+    instruction_remaining_cycles++;
+    addr_abs = pc + addr_rel;
+
+    // If the new address crosses a page boundary, then another.
+    if ((addr_abs & 0xFF00) != (pc & 0xFF00))
+      instruction_remaining_cycles++;
+
+    pc = addr_abs;
+  }
+  return 0;
+}
+
+// Branch on 'plus' (positive)
+u8 CPU::BPL() { return branchBaseInstruction(GetFlag(N) == 0); }
+
+// Branch on 'minus' (negative)
+u8 CPU::BMI() { return branchBaseInstruction(GetFlag(N) == 1); }
+
+// Branch on overflow clear
+u8 CPU::BVC() { return branchBaseInstruction(GetFlag(V) == 0); }
+
+// Branch on overflow set
+u8 CPU::BVS() { return branchBaseInstruction(GetFlag(V) == 1); }
+
+// Branch on carry clear
+u8 CPU::BCC() { return branchBaseInstruction(GetFlag(C) == 0); }
+
+// Branch on carry set
+u8 CPU::BCS() { return branchBaseInstruction(GetFlag(C) == 1); }
+
+// Branch on not-equal
+u8 CPU::BNE() { return branchBaseInstruction(GetFlag(Z) == 0); }
+
+// Branch on equal
+u8 CPU::BEQ() { return branchBaseInstruction(GetFlag(Z) == 1); }
 
 u8 CPU::BRK() {}
 u8 CPU::CMP() {}
@@ -250,15 +325,52 @@ u8 CPU::CPX() {}
 u8 CPU::DEC() {}
 u8 CPU::EOR() {}
 
-u8 CPU::CLC() {}
-u8 CPU::SEC() {}
-u8 CPU::CLI() {}
-u8 CPU::SEI() {}
-u8 CPU::CLV() {}
-u8 CPU::CLD() {}
-u8 CPU::SED() {}
+u8 CPU::CLC()
+{
+  SetFlag(C, 0);
+  return 0;
+}
+u8 CPU::SEC()
+{
+  SetFlag(C, 1);
+  return 0;
+}
+u8 CPU::CLI()
+{
+  SetFlag(I, 0);
+  return 0;
+}
+u8 CPU::SEI()
+{
+  SetFlag(I, 1);
+  return 0;
+}
+u8 CPU::CLV()
+{
+  SetFlag(V, 0);
+  return 0;
+}
+u8 CPU::CLD()
+{
+  SetFlag(D, 0);
+  return 0;
+}
+u8 CPU::SED()
+{
+  SetFlag(D, 1);
+  return 0;
+}
 
-u8 CPU::INC() {}
+u8 CPU::INC()
+{
+  u8 temp = read(addr_abs);
+  temp++;
+  write(addr_abs, temp);
+  SetFlag(N, temp & 0x80);
+  SetFlag(Z, temp == 0);
+  return 0;
+}
+
 u8 CPU::JMP() {}
 u8 CPU::JSR() {}
 u8 CPU::LDA() {}
@@ -266,49 +378,219 @@ u8 CPU::LDX() {}
 u8 CPU::LDY() {}
 u8 CPU::LSR() {}
 
-u8 CPU::NOP() {}
+u8 CPU::NOP()
+{
+  return 0;
+}
+
 u8 CPU::ORA() {}
 
-u8 CPU::TAX() {}
-u8 CPU::TXA() {}
-u8 CPU::DEX() {}
-u8 CPU::INX() {}
-u8 CPU::TAY() {}
-u8 CPU::TYA() {}
-u8 CPU::DEY() {}
-u8 CPU::INY() {}
+u8 CPU::TAX()
+{
+  x = a;
+  SetFlag(N, a & 0x80);
+  SetFlag(Z, a == 0);
+  return 0;
+}
+u8 CPU::TXA()
+{
+  a = x;
+  SetFlag(N, a & 0x80);
+  SetFlag(Z, a == 0);
+  return 0;
+}
+u8 CPU::DEX()
+{
+  x--;
+  SetFlag(N, x & 0x80);
+  SetFlag(Z, x == 0);
+  return 0;
+}
+u8 CPU::INX()
+{
+  x++;
+  SetFlag(N, x & 0x80);
+  SetFlag(Z, x == 0);
+  return 0;
+}
+u8 CPU::TAY()
+{
+  y = a;
+  SetFlag(N, y & 0x80);
+  SetFlag(Z, y == 0);
+  return 0;
+}
+u8 CPU::TYA()
+{
+  a = y;
+  SetFlag(N, a & 0x80);
+  SetFlag(Z, a == 0);
+  return 0;
+}
+u8 CPU::DEY()
+{
+  y--;
+  SetFlag(N, y & 0x80);
+  SetFlag(Z, y == 0);
+  return 0;
+}
+u8 CPU::INY()
+{
+  y++;
+  SetFlag(N, y & 0x80);
+  SetFlag(Z, y == 0);
+  return 0;
+}
 
 u8 CPU::ROL() {}
 u8 CPU::ROR() {}
 u8 CPU::RTI() {}
 u8 CPU::RTS() {}
 u8 CPU::SBC() {}
-u8 CPU::STA() {}
+u8 CPU::STA()
+{
+  write(addr_abs, a);
+  return 0;
+}
 
-u8 CPU::TXS() {}
-u8 CPU::TSX() {}
-u8 CPU::PHA() {}
-u8 CPU::PLA() {}
-u8 CPU::PHP() {}
-u8 CPU::PLP() {}
-u8 CPU::STX() {}
-u8 CPU::STY() {}
+u8 CPU::TXS()
+{
+  sp = x;
+  return 0;
+}
+u8 CPU::TSX()
+{
+  x = sp;
+  SetFlag(Z, x == 0);
+  SetFlag(N, x & 0x080);
+  return 0;
+}
 
-u8 CPU::accumulator() {}
+// Push accumulator
+u8 CPU::PHA()
+{
+  write(0x0100 | sp, a);
+  sp--;
+  return 0;
+}
+
+u8 CPU::PLA()
+{
+  sp++;
+  a = read(0x0100 | sp);
+  SetFlag(Z, a == 0x00);
+  SetFlag(N, a & 0x80);
+  return 0;
+}
+
+u8 CPU::PHP()
+{
+  write(0x0100 | sp, p);
+  sp--;
+  return 0;
+}
+
+u8 CPU::PLP()
+{
+  sp++;
+  p = read(0x0100 | sp);
+  return 0;
+}
+u8 CPU::STX()
+{
+  write(addr_abs, x);
+  return 0;
+}
+u8 CPU::STY()
+{
+  write(addr_abs, y);
+  return 0;
+}
+
+///////////////////////////////////////////////////////////////
+// Addressing Modes
+
 u8 CPU::addr_implied() {}
 u8 CPU::addr_immediate() {}
-u8 CPU::addr_zeropage() {}
-u8 CPU::addr_zeropage_x() {}
-u8 CPU::addr_zeropage_y() {}
-u8 CPU::addr_absolute() {}
-u8 CPU::addr_absolute_x() {}
-u8 CPU::addr_absolute_y() {}
+u8 CPU::addr_zeropage()
+{
+  addr_abs = read(pc) & 0x00FF;
+  pc++;
+  return 0;
+}
+u8 CPU::addr_zeropage_x()
+{
+  addr_abs = (read(pc) + x) & 0x00FF;
+  pc++;
+  return 0;
+}
+u8 CPU::addr_zeropage_y()
+{
+  addr_abs = (read(pc) + y) & 0x00FF;
+  pc++;
+  return 0;
+}
+u8 CPU::addr_absolute()
+{
+  // low byte first, then high byte (6502 is little endian)
+  u8 high = read(pc++);
+  u8 low = read(pc++);
+
+  addr_abs = (high << 8) | low;
+  return 0;
+}
+
+u16 sign_extend_16(u8 val)
+{
+  if (val & 0x80)
+    return 0xFF00 | val;
+  return val;
+}
+
+// Only the branch instructions use this.
+u8 CPU::addr_relative()
+{
+  addr_rel = read(pc);
+  pc++;
+  addr_rel = sign_extend_16(addr_rel);
+  return 0;
+}
+
+u8 CPU::addr_absolute_x()
+{
+  // Just like absolute, but need to check for page crossing
+  u8 high = read(pc++);
+  u8 low = read(pc++);
+  addr_abs = (high << 8) | low;
+
+  addr_abs += x;
+  bool crossed_page = addr_abs & 0xFF00 != (high << 8);
+  return crossed_page ? 1 : 0;
+}
+
+u8 CPU::addr_absolute_y()
+{
+  // Just like absolute, but need to check for page crossing
+  u8 high = read(pc++);
+  u8 low = read(pc++);
+  addr_abs = (high << 8) | low;
+
+  addr_abs += y;
+  bool crossed_page = addr_abs & 0xFF00 != (high << 8);
+  return crossed_page ? 1 : 0;
+}
 u8 CPU::addr_indirect() {}
 u8 CPU::addr_indirect_x() {}
 u8 CPU::addr_indirect_y() {}
 
 u8 CPU::read(u16 addr)
 {
+  // TODO
+}
+
+void CPU::write(u16 addr, u8 val)
+{
+  // TODO
 }
 
 void CPU::Clock()
@@ -316,7 +598,7 @@ void CPU::Clock()
   if (instruction_remaining_cycles == 0)
   {
     // Read the next instruction
-    u8 opcode = read(pc);
+    opcode = read(pc);
     pc++;
 
     u8 operation_base_cycles = instructions[opcode].cycles;

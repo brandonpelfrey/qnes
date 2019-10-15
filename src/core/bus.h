@@ -10,9 +10,9 @@ class Bus
 private:
   std::shared_ptr<CPU> cpu;
   std::shared_ptr<PPU> ppu;
-  u8 RAM[2048];
+  u8 RAM[0x0800];
 
 public:
-  u8 Read_U8(u16 address);
-  void Write_U8(u16 address, u8 val);
+  u8 Read(u16 address, bool affects_state=true);
+  void Write(u16 address, u8 val);
 };
