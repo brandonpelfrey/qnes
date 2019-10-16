@@ -232,7 +232,7 @@ CPU::CPU()
 
 void CPU::Reset()
 {
-  pc = 0;
+  pc = 0xFFFC;
   p = 0x34;
   a = x = y = 0;
   sp = 0xFD;

@@ -26,13 +26,13 @@ u8 Bus::Read(u16 address, bool affects_state)
   }
   else
   {
-    assert(0 && "Reads from cartridge not implemented");
+    return cartridge->Read(address);
   }
 }
 
 void Bus::Write(u16 address, u8 val)
 {
-  if (address < address < 0x2000)
+  if (address < 0x2000)
   {
     address &= 0x7FF;
     RAM[address] = val;

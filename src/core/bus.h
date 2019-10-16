@@ -4,12 +4,14 @@
 #include "./types.h"
 #include "./cpu.h"
 #include "./ppu.h"
+#include "./cartridge.h"
 
 class Bus
 {
 private:
   std::shared_ptr<CPU> cpu;
   std::shared_ptr<PPU> ppu;
+  std::shared_ptr<Cartridge> cartridge;
   u8 RAM[0x0800];
 
 public:

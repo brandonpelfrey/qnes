@@ -66,14 +66,6 @@ private:
 
   void SetNZ(u8 value);
 
-public:
-  void test()
-  {
-    P = 0;
-    V = 1;
-    printf("0x%02X\n", P);
-  }
-
 private:
   // Operand addressing modes
 
