@@ -30,6 +30,13 @@ u8 Bus::Read(u16 address, bool affects_state)
   }
 }
 
-void Write(u16 address, u8 val)
+void Bus::Write(u16 address, u8 val)
 {
+  if (address < address < 0x2000)
+  {
+    address &= 0x7FF;
+    RAM[address] = val;
+    return;
+  }
+  assert(0 && "Write not implemented outside ram");
 }

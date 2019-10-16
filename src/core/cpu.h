@@ -7,7 +7,6 @@
 #include "./types.h"
 
 class Bus;
-class CPUState;
 
 class CPU
 {
@@ -21,12 +20,14 @@ private:
   };
 
   std::vector<InstructionEntry> instructions;
-  std::shared_ptr<Bus> bus;
-  std::unique_ptr<CPUState> state;
 
 private:
   u8 read(u16 addr);
   void write(u16 addr, u8 val);
+  Bus *bus;
+
+public:
+  void SetBus(Bus *bus) { this->bus = bus; }
 
 private:
   // CPU State
@@ -48,21 +49,30 @@ private:
   u8 fetched_data;
   u8 scratch_u8;
 
-  enum StatusFlag
-  {
-    N = 1 << 7,
-    V = 1 << 6,
-    U = 1 << 5, // unused
-    B = 1 << 4, // also unused, but has a name :)
-    D = 1 << 3,
-    I = 1 << 2,
-    Z = 1 << 1,
-    C = 1 << 0
+  union {
+    u8 P;
+    struct
+    {
+      u8 C : 1;
+      u8 Z : 1;
+      u8 I : 1;
+      u8 D : 1;
+      u8 B : 1;
+      u8 U : 1;
+      u8 V : 1;
+      u8 N : 1;
+    };
   };
 
+  void SetNZ(u8 value);
+
 public:
-  void SetFlag(StatusFlag flag, u8 val);
-  u8 GetFlag(StatusFlag flag);
+  void test()
+  {
+    P = 0;
+    V = 1;
+    printf("0x%02X\n", P);
+  }
 
 private:
   // Operand addressing modes
@@ -152,5 +162,9 @@ private:
 
 public:
   CPU();
+  void Step();
   void Clock();
+  void Reset();
+  void SoftReset();
+  void Debug();
 };

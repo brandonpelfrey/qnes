@@ -1,7 +1,9 @@
 #include <cstdio>
+#include "core/console.h"
 
 int main(int argc, char **argv)
 {
-  printf("Test\n");
+  Console console;
+  console.Test1();
   return 0;
 }

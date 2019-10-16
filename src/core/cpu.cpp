@@ -50,14 +50,14 @@ CPU::CPU()
   instructions[0x2C] = {"BIT", &CPU::BIT, &CPU::addr_absolute, 4};
 
   // Branch instructions
-  instructions[0x10] = {"BPL", &CPU::BIT, &CPU::addr_absolute, 2};
-  instructions[0x30] = {"BMI", &CPU::BIT, &CPU::addr_absolute, 2};
-  instructions[0x50] = {"BVC", &CPU::BIT, &CPU::addr_absolute, 2};
-  instructions[0x70] = {"BVS", &CPU::BIT, &CPU::addr_absolute, 2};
-  instructions[0x90] = {"BCC", &CPU::BIT, &CPU::addr_absolute, 2};
-  instructions[0xB0] = {"BCS", &CPU::BIT, &CPU::addr_absolute, 2};
-  instructions[0xD0] = {"BNE", &CPU::BIT, &CPU::addr_absolute, 2};
-  instructions[0xF0] = {"BEQ", &CPU::BIT, &CPU::addr_absolute, 2};
+  instructions[0x10] = {"BPL", &CPU::BPL, &CPU::addr_relative, 2};
+  instructions[0x30] = {"BMI", &CPU::BMI, &CPU::addr_relative, 2};
+  instructions[0x50] = {"BVC", &CPU::BVC, &CPU::addr_relative, 2};
+  instructions[0x70] = {"BVS", &CPU::BVS, &CPU::addr_relative, 2};
+  instructions[0x90] = {"BCC", &CPU::BCC, &CPU::addr_relative, 2};
+  instructions[0xB0] = {"BCS", &CPU::BCS, &CPU::addr_relative, 2};
+  instructions[0xD0] = {"BNE", &CPU::BNE, &CPU::addr_relative, 2};
+  instructions[0xF0] = {"BEQ", &CPU::BEQ, &CPU::addr_relative, 2};
 
   // BRK
   instructions[0x00] = {"BRK", &CPU::BRK, &CPU::addr_implied, 7};
@@ -73,9 +73,9 @@ CPU::CPU()
   instructions[0xD1] = {"CMP", &CPU::CMP, &CPU::addr_indirect_y, 5};
 
   // CPX
-  instructions[0xC0] = {"CPX", &CPU::CPX, &CPU::addr_immediate, 2};
-  instructions[0xC4] = {"CPX", &CPU::CPX, &CPU::addr_zeropage, 3};
-  instructions[0xCC] = {"CPX", &CPU::CPX, &CPU::addr_absolute, 4};
+  instructions[0xE0] = {"CPX", &CPU::CPX, &CPU::addr_immediate, 2};
+  instructions[0xE4] = {"CPX", &CPU::CPX, &CPU::addr_zeropage, 3};
+  instructions[0xEC] = {"CPX", &CPU::CPX, &CPU::addr_absolute, 4};
 
   // DEC
   instructions[0xC6] = {"DEC", &CPU::DEC, &CPU::addr_zeropage, 5};
@@ -227,40 +227,61 @@ CPU::CPU()
   instructions[0x8C] = {"STY", &CPU::STY, &CPU::addr_absolute, 4};
 }
 
-void CPU::SetFlag(StatusFlag flag, u8 val)
+////////////////////////////////////////////////////////////////////////////////////////
+// CPU Utilities
+
+void CPU::Reset()
 {
-  u8 new_bit = val ? flag : 0;
-  p = ((~flag) & p) | new_bit;
-  // TODO : Set B/U based on https://wiki.nesdev.com/w/index.php/Status_flags#The_B_flag
+  pc = 0;
+  p = 0x34;
+  a = x = y = 0;
+  sp = 0xFD;
 }
 
-u8 CPU::GetFlag(StatusFlag flag)
+void CPU::SoftReset()
 {
-  // TODO : Set B/U based on https://wiki.nesdev.com/w/index.php/Status_flags#The_B_flag
-  return (p & flag) ? 1 : 0;
+  Reset();
+  // TODO
 }
 
-// TODO :)
+////////////////////////////////////////////////////////////////////////////////////////
+// Instruction Implementations
+
+// This is such a common thing in instructions, that we'll just wrap this into one function.
+void CPU::SetNZ(u8 value)
+{
+  N = value & 0x80 ? 1 : 0;
+  Z = value == 0 ? 1 : 0;
+}
 
 u8 CPU::ADC()
 {
+  u16 result = fetched_data + C + a;
+
+  // If both inputs had the same sign but the result has a different sign, then set V.
+  bool overflowCheck = (a & 0x80) == (fetched_data & 0x80) && (a & 0x80) != (result & 0x80);
+
+  a = result & 0xFF;
+  SetNZ(a);
+  C = result > 0xFF ? 1 : 0;
+  V = overflowCheck ? 1 : 0;
+
+  return 0;
 }
 
 u8 CPU::AND()
 {
   a &= fetched_data;
-  SetFlag(N, a & 0x80);
-  SetFlag(Z, a == 0);
+  SetNZ(a);
   return 0;
 }
 
 u8 CPU::ASL()
 {
   u8 temp = fetched_data;
-  SetFlag(C, temp & 0x80);
+  C = temp & 0x80 ? 1 : 0;
   temp = (temp << 1) & 0xFF;
-  SetFlag(N, temp & 0x80);
-  SetFlag(Z, temp == 0);
+  SetNZ(temp);
 
   if (instructions[opcode].addressing == &CPU::addr_implied)
     a = temp;
@@ -272,18 +293,21 @@ u8 CPU::ASL()
 u8 CPU::BIT()
 {
   u8 temp = a & fetched_data;
-  SetFlag(N, temp & 0x80);
-  SetFlag(Z, temp == 0);
-  SetFlag(V, temp & 0x40);
+  SetNZ(temp);
+  V = temp & 0x40 ? 1 : 0;
   return 0;
 }
 
 u8 CPU::branchBaseInstruction(bool takeBranch)
 {
+  //printf("Take Branch ? == %u\n", takeBranch);
   if (takeBranch)
   {
     // If we take the branch, there's an extra cycle.
     instruction_remaining_cycles++;
+
+    // Compute the actual branch location from the relative offset.
+    //printf("addr_abs = pc + addr_rel ----- 0x%04X = 0x%04X + 0x%04X\n", addr_abs, pc, addr_rel);
     addr_abs = pc + addr_rel;
 
     // If the new address crosses a page boundary, then another.
@@ -296,68 +320,75 @@ u8 CPU::branchBaseInstruction(bool takeBranch)
 }
 
 // Branch on 'plus' (positive)
-u8 CPU::BPL() { return branchBaseInstruction(GetFlag(N) == 0); }
+u8 CPU::BPL() { return branchBaseInstruction(N == 0); }
 
 // Branch on 'minus' (negative)
-u8 CPU::BMI() { return branchBaseInstruction(GetFlag(N) == 1); }
+u8 CPU::BMI() { return branchBaseInstruction(N == 1); }
 
 // Branch on overflow clear
-u8 CPU::BVC() { return branchBaseInstruction(GetFlag(V) == 0); }
+u8 CPU::BVC() { return branchBaseInstruction(V == 0); }
 
 // Branch on overflow set
-u8 CPU::BVS() { return branchBaseInstruction(GetFlag(V) == 1); }
+u8 CPU::BVS() { return branchBaseInstruction(V == 1); }
 
 // Branch on carry clear
-u8 CPU::BCC() { return branchBaseInstruction(GetFlag(C) == 0); }
+u8 CPU::BCC() { return branchBaseInstruction(C == 0); }
 
 // Branch on carry set
-u8 CPU::BCS() { return branchBaseInstruction(GetFlag(C) == 1); }
+u8 CPU::BCS() { return branchBaseInstruction(C == 1); }
 
 // Branch on not-equal
-u8 CPU::BNE() { return branchBaseInstruction(GetFlag(Z) == 0); }
+u8 CPU::BNE() { return branchBaseInstruction(Z == 0); }
 
 // Branch on equal
-u8 CPU::BEQ() { return branchBaseInstruction(GetFlag(Z) == 1); }
+u8 CPU::BEQ() { return branchBaseInstruction(Z == 1); }
 
 u8 CPU::BRK() {}
 u8 CPU::CMP() {}
-u8 CPU::CPX() {}
+u8 CPU::CPX()
+{
+  u8 temp = x + 1 + ~read(addr_abs);
+  SetNZ(temp);
+  C = x >= fetched_data ? 1 : 0;
+  //printf("CPX temp=%u, C=%u\n", temp, C);
+  return 0;
+}
 u8 CPU::DEC() {}
 u8 CPU::EOR() {}
 
 u8 CPU::CLC()
 {
-  SetFlag(C, 0);
+  C = 0;
   return 0;
 }
 u8 CPU::SEC()
 {
-  SetFlag(C, 1);
+  C = 1;
   return 0;
 }
 u8 CPU::CLI()
 {
-  SetFlag(I, 0);
+  I = 0;
   return 0;
 }
 u8 CPU::SEI()
 {
-  SetFlag(I, 1);
+  I = 1;
   return 0;
 }
 u8 CPU::CLV()
 {
-  SetFlag(V, 0);
+  V = 0;
   return 0;
 }
 u8 CPU::CLD()
 {
-  SetFlag(D, 0);
+  D = 0;
   return 0;
 }
 u8 CPU::SED()
 {
-  SetFlag(D, 1);
+  D = 1;
   return 0;
 }
 
@@ -366,8 +397,7 @@ u8 CPU::INC()
   u8 temp = read(addr_abs);
   temp++;
   write(addr_abs, temp);
-  SetFlag(N, temp & 0x80);
-  SetFlag(Z, temp == 0);
+  SetNZ(temp);
   return 0;
 }
 
@@ -383,62 +413,59 @@ u8 CPU::NOP()
   return 0;
 }
 
-u8 CPU::ORA() {}
+u8 CPU::ORA()
+{
+  a |= read(addr_abs);
+  SetNZ(a);
+  return 0;
+}
 
 u8 CPU::TAX()
 {
   x = a;
-  SetFlag(N, a & 0x80);
-  SetFlag(Z, a == 0);
+  SetNZ(x);
   return 0;
 }
 u8 CPU::TXA()
 {
   a = x;
-  SetFlag(N, a & 0x80);
-  SetFlag(Z, a == 0);
+  SetNZ(a);
   return 0;
 }
 u8 CPU::DEX()
 {
   x--;
-  SetFlag(N, x & 0x80);
-  SetFlag(Z, x == 0);
+  SetNZ(x);
   return 0;
 }
 u8 CPU::INX()
 {
   x++;
-  SetFlag(N, x & 0x80);
-  SetFlag(Z, x == 0);
+  SetNZ(x);
   return 0;
 }
 u8 CPU::TAY()
 {
   y = a;
-  SetFlag(N, y & 0x80);
-  SetFlag(Z, y == 0);
+  SetNZ(y);
   return 0;
 }
 u8 CPU::TYA()
 {
   a = y;
-  SetFlag(N, a & 0x80);
-  SetFlag(Z, a == 0);
+  SetNZ(a);
   return 0;
 }
 u8 CPU::DEY()
 {
   y--;
-  SetFlag(N, y & 0x80);
-  SetFlag(Z, y == 0);
+  SetNZ(y);
   return 0;
 }
 u8 CPU::INY()
 {
   y++;
-  SetFlag(N, y & 0x80);
-  SetFlag(Z, y == 0);
+  SetNZ(y);
   return 0;
 }
 
@@ -461,8 +488,7 @@ u8 CPU::TXS()
 u8 CPU::TSX()
 {
   x = sp;
-  SetFlag(Z, x == 0);
-  SetFlag(N, x & 0x080);
+  SetNZ(x);
   return 0;
 }
 
@@ -478,8 +504,7 @@ u8 CPU::PLA()
 {
   sp++;
   a = read(0x0100 | sp);
-  SetFlag(Z, a == 0x00);
-  SetFlag(N, a & 0x80);
+  SetNZ(a);
   return 0;
 }
 
@@ -510,8 +535,18 @@ u8 CPU::STY()
 ///////////////////////////////////////////////////////////////
 // Addressing Modes
 
-u8 CPU::addr_implied() {}
-u8 CPU::addr_immediate() {}
+u8 CPU::addr_implied()
+{
+  // ???
+  return 0;
+}
+
+u8 CPU::addr_immediate()
+{
+  addr_abs = pc;
+  pc++;
+  return 0;
+}
 u8 CPU::addr_zeropage()
 {
   addr_abs = read(pc) & 0x00FF;
@@ -579,18 +614,19 @@ u8 CPU::addr_absolute_y()
   bool crossed_page = addr_abs & 0xFF00 != (high << 8);
   return crossed_page ? 1 : 0;
 }
+
 u8 CPU::addr_indirect() {}
 u8 CPU::addr_indirect_x() {}
 u8 CPU::addr_indirect_y() {}
 
 u8 CPU::read(u16 addr)
 {
-  // TODO
+  return bus->Read(addr);
 }
 
 void CPU::write(u16 addr, u8 val)
 {
-  // TODO
+  bus->Write(addr, val);
 }
 
 void CPU::Clock()
@@ -612,4 +648,45 @@ void CPU::Clock()
   total_clock_cycles++;
 
   // Invoke
+}
+
+void CPU::Step()
+{
+  // Finish any remaining instruction which was already in flight
+  while (instruction_remaining_cycles > 0)
+    Clock();
+
+  // Start the next instruction, then run it to completion
+  Clock();
+  while (instruction_remaining_cycles > 0)
+    Clock();
+}
+
+void CPU::Debug()
+{
+  printf("0x%04X ", pc);
+
+  u8 opcode = read(pc);
+  auto entry = instructions[opcode];
+
+  if (entry.addressing == &CPU::addr_implied)
+  {
+    printf("%s", entry.name.c_str());
+  }
+  else if (entry.addressing == &CPU::addr_immediate)
+  {
+    printf("%s $%02X", entry.name.c_str(), read(pc + 1));
+  }
+  else if (entry.addressing == &CPU::addr_relative)
+  {
+    u16 branch_address = pc + 2 + sign_extend_16(read(pc + 1));
+    printf("%s 0x%04X", entry.name.c_str(), branch_address);
+  }
+  else
+  {
+    printf("??? opcode 0x%02X", opcode);
+  }
+  printf("\n");
+
+  //printf("%010u :: %s --  A=0x%02X X=0x%02X Y=0x%02X Z=%d PC=0x%04X\n", total_clock_cycles, instructions[opcode].name.c_str(), a, x, y, Z, pc);
 }
