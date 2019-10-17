@@ -4,18 +4,24 @@
 
 #include "./bus.h"
 #include "./cpu.h"
+#include "./ppu.h"
+#include "./cartridge.h"
 
 class Console
 {
 private:
-  std::unique_ptr<Bus> bus;
-  std::unique_ptr<CPU> cpu;
+  std::shared_ptr<Bus> bus;
+  std::shared_ptr<CPU> cpu;
+  std::shared_ptr<PPU> ppu;
+  std::shared_ptr<Cartridge> cartridge;
 
 public:
   Console();
-  void LoadROM(const std::string file_path);
+
+  void LoadROM(const char *file_path);
   void HardReset();
   void SoftReset();
 
   void Test1();
+  void Test2();
 };

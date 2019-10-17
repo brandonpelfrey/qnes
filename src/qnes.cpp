@@ -10,9 +10,8 @@ int main(int argc, char **argv)
     exit(1);
   }
 
-  Cartridge::LoadRomFile(argv[1]);
-
   Console console;
-  console.Test1();
+  console.LoadROM( argv[1] );
+  console.Test2();
   return 0;
 }

@@ -119,8 +119,8 @@ CPU::CPU()
   instructions[0xA9] = {"LDA", &CPU::LDA, &CPU::addr_immediate, 2};
   instructions[0xA5] = {"LDA", &CPU::LDA, &CPU::addr_zeropage, 3};
   instructions[0xB5] = {"LDA", &CPU::LDA, &CPU::addr_zeropage_x, 4};
-  instructions[0xBD] = {"LDA", &CPU::LDA, &CPU::addr_absolute, 4};
-  instructions[0xAD] = {"LDA", &CPU::LDA, &CPU::addr_absolute_x, 4};
+  instructions[0xAD] = {"LDA", &CPU::LDA, &CPU::addr_absolute, 4};
+  instructions[0xBD] = {"LDA", &CPU::LDA, &CPU::addr_absolute_x, 4};
   instructions[0xB9] = {"LDA", &CPU::LDA, &CPU::addr_absolute_y, 4};
   instructions[0xA1] = {"LDA", &CPU::LDA, &CPU::addr_indirect_x, 6};
   instructions[0xB1] = {"LDA", &CPU::LDA, &CPU::addr_indirect_y, 5};
@@ -171,17 +171,17 @@ CPU::CPU()
 
   // ROL
   instructions[0x2A] = {"ROL", &CPU::ROL, &CPU::addr_implied, 2};
-  instructions[0x26] = {"ROL", &CPU::ROL, &CPU::addr_implied, 5};
-  instructions[0x36] = {"ROL", &CPU::ROL, &CPU::addr_implied, 6};
-  instructions[0x2E] = {"ROL", &CPU::ROL, &CPU::addr_implied, 6};
-  instructions[0x3E] = {"ROL", &CPU::ROL, &CPU::addr_implied, 7};
+  instructions[0x26] = {"ROL", &CPU::ROL, &CPU::addr_zeropage, 5};
+  instructions[0x36] = {"ROL", &CPU::ROL, &CPU::addr_zeropage_x, 6};
+  instructions[0x2E] = {"ROL", &CPU::ROL, &CPU::addr_absolute, 6};
+  instructions[0x3E] = {"ROL", &CPU::ROL, &CPU::addr_absolute_x, 7};
 
   // ROR
   instructions[0x6A] = {"ROR", &CPU::ROR, &CPU::addr_implied, 2};
-  instructions[0x66] = {"ROR", &CPU::ROR, &CPU::addr_implied, 5};
-  instructions[0x76] = {"ROR", &CPU::ROR, &CPU::addr_implied, 6};
-  instructions[0x6E] = {"ROR", &CPU::ROR, &CPU::addr_implied, 6};
-  instructions[0x7E] = {"ROR", &CPU::ROR, &CPU::addr_implied, 7};
+  instructions[0x66] = {"ROR", &CPU::ROR, &CPU::addr_zeropage, 5};
+  instructions[0x76] = {"ROR", &CPU::ROR, &CPU::addr_zeropage_x, 6};
+  instructions[0x6E] = {"ROR", &CPU::ROR, &CPU::addr_absolute, 6};
+  instructions[0x7E] = {"ROR", &CPU::ROR, &CPU::addr_absolute_x, 7};
 
   // RTI
   instructions[0x40] = {"RTI", &CPU::RTI, &CPU::addr_implied, 6};
@@ -232,10 +232,11 @@ CPU::CPU()
 
 void CPU::Reset()
 {
-  pc = 0xFFFC;
   p = 0x34;
   a = x = y = 0;
   sp = 0xFD;
+
+  pc = read(0xFFFC) | (read(0xFFFD) << 8);
 }
 
 void CPU::SoftReset()
@@ -256,10 +257,11 @@ void CPU::SetNZ(u8 value)
 
 u8 CPU::ADC()
 {
-  u16 result = fetched_data + C + a;
+  u8 arg = read(addr_abs);
+  u16 result = +C + a;
 
   // If both inputs had the same sign but the result has a different sign, then set V.
-  bool overflowCheck = (a & 0x80) == (fetched_data & 0x80) && (a & 0x80) != (result & 0x80);
+  bool overflowCheck = (a & 0x80) == (arg & 0x80) && (a & 0x80) != (result & 0x80);
 
   a = result & 0xFF;
   SetNZ(a);
@@ -271,7 +273,7 @@ u8 CPU::ADC()
 
 u8 CPU::AND()
 {
-  a &= fetched_data;
+  a &= read(addr_abs);
   SetNZ(a);
   return 0;
 }
@@ -344,7 +346,16 @@ u8 CPU::BNE() { return branchBaseInstruction(Z == 0); }
 u8 CPU::BEQ() { return branchBaseInstruction(Z == 1); }
 
 u8 CPU::BRK() {}
-u8 CPU::CMP() {}
+
+u8 CPU::CMP()
+{
+  u8 arg = read(addr_abs);
+  u8 result = a + 1 + ~arg;
+  SetNZ(result);
+  C = a >= arg ? 1 : 0;
+  return 0;
+}
+
 u8 CPU::CPX()
 {
   u8 temp = x + 1 + ~read(addr_abs);
@@ -353,8 +364,20 @@ u8 CPU::CPX()
   //printf("CPX temp=%u, C=%u\n", temp, C);
   return 0;
 }
-u8 CPU::DEC() {}
-u8 CPU::EOR() {}
+u8 CPU::DEC()
+{
+  u8 temp = read(addr_abs);
+  temp -= 1;
+  SetNZ(temp);
+  write(addr_abs, temp);
+  return 0;
+}
+u8 CPU::EOR()
+{
+  a ^= read(addr_abs);
+  SetNZ(a);
+  return 0;
+}
 
 u8 CPU::CLC()
 {
@@ -401,12 +424,49 @@ u8 CPU::INC()
   return 0;
 }
 
-u8 CPU::JMP() {}
-u8 CPU::JSR() {}
-u8 CPU::LDA() {}
-u8 CPU::LDX() {}
-u8 CPU::LDY() {}
-u8 CPU::LSR() {}
+u8 CPU::JMP()
+{
+  pc = addr_abs;
+}
+
+u8 CPU::JSR()
+{
+  u16 pc_for_jsr_instruction = pc - 1;
+  push(pc_for_jsr_instruction >> 8);
+  push(pc_for_jsr_instruction & 0xFF);
+
+  pc = addr_abs;
+}
+u8 CPU::LDA()
+{
+  a = read(addr_abs);
+  SetNZ(a);
+  return 0;
+}
+
+u8 CPU::LDX()
+{
+  x = read(addr_abs);
+  SetNZ(x);
+  return 0;
+}
+
+u8 CPU::LDY()
+{
+  y = read(addr_abs);
+  SetNZ(y);
+  return 0;
+}
+
+u8 CPU::LSR()
+{
+  u8 new_carry = a & 1;
+  a >>= 1;
+  C = new_carry;
+  N = 0;
+  Z = a == 0 ? 1 : 0;
+  return 0;
+}
 
 u8 CPU::NOP()
 {
@@ -469,11 +529,82 @@ u8 CPU::INY()
   return 0;
 }
 
-u8 CPU::ROL() {}
-u8 CPU::ROR() {}
-u8 CPU::RTI() {}
-u8 CPU::RTS() {}
-u8 CPU::SBC() {}
+u8 CPU::ROL()
+{
+  u8 val;
+  if (instructions[opcode].addressing == &CPU::addr_implied)
+    val = a;
+  else
+    val = read(addr_abs);
+
+  u8 newC = a >> 7;
+  val <<= 1;
+  val = (val & 0b11111110) | C;
+
+  SetNZ(val);
+  C = newC;
+
+  if (instructions[opcode].addressing == &CPU::addr_implied)
+    a = val;
+  else
+    write(addr_abs, val);
+}
+
+u8 CPU::ROR()
+{
+  u8 val;
+  if (instructions[opcode].addressing == &CPU::addr_implied)
+    val = a;
+  else
+    val = read(addr_abs);
+
+  u8 newC = a & 1;
+  val >>= 1;
+  val = (val & 0b01111111) | (C << 7);
+
+  SetNZ(val);
+  C = newC;
+
+  if (instructions[opcode].addressing == &CPU::addr_implied)
+    a = val;
+  else
+    write(addr_abs, val);
+}
+
+u8 CPU::RTI()
+{
+  p = pop();
+
+  u16 high = pop() & 0xFF;
+  u16 low = pop() & 0xFF;
+  pc = low | (high << 8);
+}
+
+u8 CPU::RTS()
+{
+  u16 low = pop() & 0xFF;
+  u16 high = pop() & 0xFF;
+  pc = low | (high << 8);
+  pc++;
+  return 0;
+}
+
+u8 CPU::SBC()
+{
+  u8 arg = read(addr_abs) ^ 0xFF;
+  u16 result = arg + C + a;
+
+  // If both inputs had the same sign but the result has a different sign, then set V.
+  bool overflowCheck = (a & 0x80) == (arg & 0x80) && (a & 0x80) != (result & 0x80);
+
+  a = result & 0xFF;
+  SetNZ(a);
+  C = result > 0xFF ? 1 : 0;
+  V = overflowCheck ? 1 : 0;
+
+  return 0;
+}
+
 u8 CPU::STA()
 {
   write(addr_abs, a);
@@ -495,30 +626,26 @@ u8 CPU::TSX()
 // Push accumulator
 u8 CPU::PHA()
 {
-  write(0x0100 | sp, a);
-  sp--;
+  push(a);
   return 0;
 }
 
 u8 CPU::PLA()
 {
-  sp++;
-  a = read(0x0100 | sp);
+  a = pop();
   SetNZ(a);
   return 0;
 }
 
 u8 CPU::PHP()
 {
-  write(0x0100 | sp, p);
-  sp--;
+  push(p);
   return 0;
 }
 
 u8 CPU::PLP()
 {
-  sp++;
-  p = read(0x0100 | sp);
+  p = pop();
   return 0;
 }
 u8 CPU::STX()
@@ -568,8 +695,8 @@ u8 CPU::addr_zeropage_y()
 u8 CPU::addr_absolute()
 {
   // low byte first, then high byte (6502 is little endian)
-  u8 high = read(pc++);
   u8 low = read(pc++);
+  u8 high = read(pc++);
 
   addr_abs = (high << 8) | low;
   return 0;
@@ -594,8 +721,8 @@ u8 CPU::addr_relative()
 u8 CPU::addr_absolute_x()
 {
   // Just like absolute, but need to check for page crossing
-  u8 high = read(pc++);
   u8 low = read(pc++);
+  u8 high = read(pc++);
   addr_abs = (high << 8) | low;
 
   addr_abs += x;
@@ -606,8 +733,8 @@ u8 CPU::addr_absolute_x()
 u8 CPU::addr_absolute_y()
 {
   // Just like absolute, but need to check for page crossing
-  u8 high = read(pc++);
   u8 low = read(pc++);
+  u8 high = read(pc++);
   addr_abs = (high << 8) | low;
 
   addr_abs += y;
@@ -615,9 +742,29 @@ u8 CPU::addr_absolute_y()
   return crossed_page ? 1 : 0;
 }
 
-u8 CPU::addr_indirect() {}
-u8 CPU::addr_indirect_x() {}
-u8 CPU::addr_indirect_y() {}
+u8 CPU::addr_indirect()
+{
+  u8 high = read(pc++);
+  u8 low = read(pc++);
+  u16 ptr_addr = (high << 8) | low;
+
+  addr_abs = read(ptr_addr);
+  addr_abs |= (u16)read(ptr_addr + 1) << 8;
+}
+
+u8 CPU::addr_indirect_x()
+{
+  u16 ptr_addr = (read(pc++) + x) & 0xFF;
+
+  addr_abs = read(ptr_addr);
+  addr_abs |= (u16)read(ptr_addr + 1) << 8;
+}
+u8 CPU::addr_indirect_y()
+{
+  u16 ptr_addr = read(pc++) & 0xFF;
+  addr_abs = read(ptr_addr + y);
+  addr_abs |= (u16)read(ptr_addr + 1) << 8;
+}
 
 u8 CPU::read(u16 addr)
 {
@@ -631,11 +778,17 @@ void CPU::write(u16 addr, u8 val)
 
 void CPU::Clock()
 {
+  if (oam_dma_cycles_remaining > 0)
+  {
+    oam_dma_cycles_remaining--;
+    total_clock_cycles++;
+    return;
+  }
+
   if (instruction_remaining_cycles == 0)
   {
     // Read the next instruction
-    opcode = read(pc);
-    pc++;
+    opcode = read(pc++);
 
     u8 operation_base_cycles = instructions[opcode].cycles;
     u8 address_mode_cycles = (this->*instructions[opcode].addressing)();
@@ -646,47 +799,151 @@ void CPU::Clock()
 
   instruction_remaining_cycles--;
   total_clock_cycles++;
-
-  // Invoke
 }
 
-void CPU::Step()
+int CPU::Step()
 {
+  int total_step_cycles = 0;
+
   // Finish any remaining instruction which was already in flight
   while (instruction_remaining_cycles > 0)
+  {
     Clock();
+    total_step_cycles++;
+  }
 
   // Start the next instruction, then run it to completion
   Clock();
+  total_step_cycles++;
+
   while (instruction_remaining_cycles > 0)
+  {
     Clock();
+    total_step_cycles++;
+  }
+
+  return total_step_cycles;
+}
+
+void CPU::TriggerNMI()
+{
+  push(pc & 0xFF);
+  push((pc >> 8) & 0xFF);
+  push(p);
+  pc = read16(0xFFFA);
+}
+
+u16 CPU::read16(u16 addr)
+{
+  u16 low = read(addr) & 0xFF;
+  u16 high = read(addr + 1) & 0xFF;
+  return (high << 8) | low;
+}
+
+void CPU::push(u8 val)
+{
+  bus->Write(0x100 | sp, val);
+  sp--;
+}
+
+u8 CPU::pop()
+{
+  sp++;
+  return bus->Read(0x100 | sp);
+}
+
+void CPU::InitiateOAMDMACounter()
+{
+  oam_dma_cycles_remaining = 513;
 }
 
 void CPU::Debug()
 {
-  printf("0x%04X ", pc);
+  char disassembly_string[256];
+  char *disassembly = disassembly_string;
+
+  disassembly += sprintf(disassembly, "0x%04X ", pc);
 
   u8 opcode = read(pc);
   auto entry = instructions[opcode];
 
+  u8 pc1 = read(pc + 1);
+  u8 pc2 = read(pc + 2);
+  u16 branch_address = pc + 2 + sign_extend_16(pc1);
+
   if (entry.addressing == &CPU::addr_implied)
   {
-    printf("%s", entry.name.c_str());
+    disassembly += sprintf(disassembly, "%s", entry.name.c_str());
   }
   else if (entry.addressing == &CPU::addr_immediate)
   {
-    printf("%s $%02X", entry.name.c_str(), read(pc + 1));
+    disassembly += sprintf(disassembly, "%s #$%02X", entry.name.c_str(), pc1);
+  }
+  else if (entry.addressing == &CPU::addr_absolute)
+  {
+    disassembly += sprintf(disassembly, "%s $%02X%02X", entry.name.c_str(), pc2, pc1);
+  }
+  else if (entry.addressing == &CPU::addr_absolute_x)
+  {
+    disassembly += sprintf(disassembly, "%s $%02X%02X,X", entry.name.c_str(), pc2, pc1);
+  }
+  else if (entry.addressing == &CPU::addr_absolute_y)
+  {
+    disassembly += sprintf(disassembly, "%s $%02X%02X,Y", entry.name.c_str(), pc2, pc1);
+  }
+  else if (entry.addressing == &CPU::addr_zeropage)
+  {
+    disassembly += sprintf(disassembly, "%s $%02X", entry.name.c_str(), pc1);
+  }
+  else if (entry.addressing == &CPU::addr_zeropage_x)
+  {
+    disassembly += sprintf(disassembly, "%s $%02X,X", entry.name.c_str(), pc1);
+  }
+  else if (entry.addressing == &CPU::addr_zeropage_y)
+  {
+    disassembly += sprintf(disassembly, "%s $%02X,Y", entry.name.c_str(), pc1);
+  }
+  else if (entry.addressing == &CPU::addr_indirect)
+  {
+    disassembly += sprintf(disassembly, "%s ($%02X%02X)", entry.name.c_str(), pc2, pc1);
+    // TODO : show indirect pointer
+  }
+  else if (entry.addressing == &CPU::addr_indirect_x)
+  {
+    disassembly += sprintf(disassembly, "%s ($%02X,X)", entry.name.c_str(), pc1);
+    // TODO : show indirect pointer
+  }
+  else if (entry.addressing == &CPU::addr_indirect_y)
+  {
+    disassembly += sprintf(disassembly, "%s ($%02X),Y", entry.name.c_str(), pc1);
+    // TODO : show indirect pointer
   }
   else if (entry.addressing == &CPU::addr_relative)
   {
-    u16 branch_address = pc + 2 + sign_extend_16(read(pc + 1));
-    printf("%s 0x%04X", entry.name.c_str(), branch_address);
+    disassembly += sprintf(disassembly, "%s $%04X", entry.name.c_str(), branch_address);
   }
   else
   {
-    printf("??? opcode 0x%02X", opcode);
+    disassembly += sprintf(disassembly, "??? opcode 0x%02X", opcode);
   }
-  printf("\n");
 
-  //printf("%010u :: %s --  A=0x%02X X=0x%02X Y=0x%02X Z=%d PC=0x%04X\n", total_clock_cycles, instructions[opcode].name.c_str(), a, x, y, Z, pc);
+  printf("%-20s ", disassembly_string);
+  printf(":: %010u :: AXYSP = %02X,%02X,%02X,%02X,%02X  --  ", total_clock_cycles, a, x, y, sp, p);
+
+  const int W = 3;
+  for (int i = -W; i <= W; ++i)
+  {
+    u16 q = 0x100 | ((sp + i) & 0xFF);
+
+    if (i == 0)
+    {
+      printf("[%02X] ", read(q));
+    }
+    else
+    {
+      printf("%02X ", read(q));
+    }
+  }
+
+  printf("\n");
 }

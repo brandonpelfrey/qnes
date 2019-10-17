@@ -2,10 +2,23 @@
 #include "console.h"
 
 Console::Console()
-    : bus(std::make_unique<Bus>()),
-      cpu(std::make_unique<CPU>())
+    : bus(std::make_shared<Bus>()),
+      cpu(std::make_shared<CPU>()),
+      ppu(std::make_shared<PPU>())
 {
-  cpu->SetBus(bus.get());
+  // Everything get's a pointer to the bus
+  cpu->SetBus(bus);
+  ppu->SetBus(bus);
+
+  // And the bus gets to point at everything
+  bus->SetCPU(cpu);
+  bus->SetPPU(ppu);
+}
+
+void Console::LoadROM(const char *path)
+{
+  this->cartridge = std::shared_ptr<Cartridge>(Cartridge::LoadRomFile(path));
+  this->bus->SetCartridge(this->cartridge);
 }
 
 void Console::Test1()
@@ -24,5 +37,30 @@ void Console::Test1()
   {
     cpu->Debug();
     cpu->Step();
+  }
+}
+
+void Console::Test2()
+{
+  printf("Reset Vector (0xFFFC) : 0x%02X%02X\n", bus->Read(0xFFFD), bus->Read(0xFFFC));
+
+  uint64_t total = 0;
+
+  int frame_counter = 0;
+  ppu->SetEndFrameCallBack([&]() {
+    printf("frame %u -- cpu @ %llu\n", frame_counter, total);
+    frame_counter++;
+  });
+
+  cpu->Reset();
+  for (int cyc = 0; cyc < 10 * 1000 * 1000 && frame_counter < 60; ++cyc)
+  {
+    cpu->Debug();
+    int cpuCycles = cpu->Step();
+    total += cpuCycles;
+    for (int ppu_cycles = 0; ppu_cycles < 3 * cpuCycles; ++ppu_cycles)
+    {
+      ppu->Clock();
+    }
   }
 }

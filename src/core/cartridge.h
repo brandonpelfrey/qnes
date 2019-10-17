@@ -18,13 +18,18 @@ class Cartridge
 {
 protected:
   CartridgeDescription description;
-  std::unique_ptr<u8> PRG_ROM;
-  std::unique_ptr<u8> CHR_ROM;
+  u8 *PRG_ROM;
+  u8 *CHR_ROM;
 
 public:
   static Cartridge *LoadRomFile(const char *path);
-
   const CartridgeDescription &GetDescription() const { return description; }
+
+  ~Cartridge()
+  {
+    delete[] PRG_ROM;
+    delete[] CHR_ROM;
+  }
 
   virtual u8 Read(u16 addr) = 0;
   virtual void Write(u16 addr, u8 val) = 0;

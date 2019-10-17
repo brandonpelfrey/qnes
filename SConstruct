@@ -5,7 +5,7 @@ import os, sys, subprocess
 
 env = Environment()
 env.Append(CPPFLAGS = ['-Wall'])
-env.Append(CXXFLAGS = ['-std=c++17', '-O3', '-g'])
+env.Append(CXXFLAGS = ['-std=c++17', '-O0', '-g'])
 env['ENV']['TERM'] = os.environ['TERM'] # Color terminal
 
 ########################################

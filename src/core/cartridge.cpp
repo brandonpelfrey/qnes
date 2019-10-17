@@ -42,16 +42,17 @@ Cartridge *Cartridge::LoadRomFile(const char *path)
   description.IgnoreMirroringControl = header[6] & 8;
   description.MapperNumber = (header[6] >> 4) | (header[7] & 0xF0);
 
+  // Print the description
   printf("Loaded rom file '%s' (Mapper %d, %uKB PRG-ROM, %uKB CHR-ROM",
          path,
          description.MapperNumber,
          16 * description.PRG_ROM_16KB_Multiple,
          8 * description.CHR_ROM_8KB_Multiple);
+
   if (description.HasBatteryBackedRAM)
     printf(", Battery-Backed RAM");
-  printf(")\n");
 
-  fclose(romFile);
+  printf(")\n");
 
   Cartridge *result;
   switch (description.MapperNumber)
@@ -68,13 +69,15 @@ Cartridge *Cartridge::LoadRomFile(const char *path)
 
   result->description = description;
 
-  int prg_rom_bytes = 16384 * description.PRG_ROM_16KB_Multiple;
-  result->PRG_ROM = std::move(std::make_unique<u8>(prg_rom_bytes));
-  fread(result->PRG_ROM.get(), sizeof(u8), prg_rom_bytes, romFile);
+  int prg_rom_bytes = 0x4000 * description.PRG_ROM_16KB_Multiple;
+  result->PRG_ROM = new u8[prg_rom_bytes];
+  fread(result->PRG_ROM, sizeof(u8), prg_rom_bytes, romFile);
 
-  int chr_rom_bytes = 8192 * description.CHR_ROM_8KB_Multiple;
-  result->CHR_ROM = std::move(std::make_unique<u8>(chr_rom_bytes));
-  fread(result->CHR_ROM.get(), sizeof(u8), chr_rom_bytes, romFile);
+  int chr_rom_bytes = 0x2000 * description.CHR_ROM_8KB_Multiple;
+  result->CHR_ROM = new u8[chr_rom_bytes];
+  fread(result->CHR_ROM, sizeof(u8), chr_rom_bytes, romFile);
+
+  fclose(romFile);
 
   return result;
 }

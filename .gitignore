@@ -1,6 +1,7 @@
 .scons*
 .vscode
 build
+roms
 
 # Prerequisites
 *.d

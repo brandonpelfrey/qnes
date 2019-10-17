@@ -24,10 +24,11 @@ private:
 private:
   u8 read(u16 addr);
   void write(u16 addr, u8 val);
-  Bus *bus;
+  std::shared_ptr<Bus> bus;
 
 public:
-  void SetBus(Bus *bus) { this->bus = bus; }
+  void InitiateOAMDMACounter();
+  void SetBus(std::shared_ptr<Bus> bus) { this->bus = bus; }
 
 private:
   // CPU State
@@ -35,6 +36,7 @@ private:
   u16 pc;
   u8 sp;
 
+  u16 oam_dma_cycles_remaining;
   u8 instruction_remaining_cycles;
   u32 total_clock_cycles = 0;
 
@@ -152,9 +154,16 @@ private:
   u8 STX();
   u8 STY();
 
+private:
+  u16 read16(u16 addr);
+  void push(u8);
+  u8 pop();
+
 public:
   CPU();
-  void Step();
+  int Step();
+
+  void TriggerNMI();
   void Clock();
   void Reset();
   void SoftReset();
