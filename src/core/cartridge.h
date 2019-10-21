@@ -31,6 +31,9 @@ public:
     delete[] CHR_ROM;
   }
 
-  virtual u8 Read(u16 addr) = 0;
-  virtual void Write(u16 addr, u8 val) = 0;
+  virtual bool CPURead(u16 addr, u8 &val) = 0;
+  virtual bool CPUWrite(u16 addr, u8 val) = 0;
+
+  virtual bool PPURead(u16 addr, u8 &val) = 0;
+  virtual bool PPUWrite(u16 addr, u8 val) = 0;
 };

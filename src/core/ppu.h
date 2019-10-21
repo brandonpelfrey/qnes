@@ -3,6 +3,7 @@
 #include <memory>
 #include <functional>
 #include "core/types.h"
+#include "core/texture.h"
 
 class Bus;
 class PPU
@@ -10,15 +11,18 @@ class PPU
 private:
   std::shared_ptr<Bus> bus;
 
-  u16 scanline;
+  u16 pixel_y;
   u16 pixel_x;
 
   u8 nmi_latch;
-  bool ppu_scroll_input_xy;
+  u8 address_latch;
   u8 scroll_x;
   u8 scroll_y;
 
-  u8 OAM_RAM[256];;
+  u16 vram_addr;
+
+  u8 PPU_DATA_read_buffer;
+  u8 OAM_RAM[256];
 
   union {
     u8 PPUCTRL;
@@ -80,8 +84,15 @@ private:
     u8 OAMDMA;
   };
 
+  // 16KB address space, some of it is mirrors.
+  u8 *vram;
+  Texture frame_buffer;
+
+  void render_pixel();
+
 public:
   PPU();
+  ~PPU();
 
   void SetBus(std::shared_ptr<Bus> bus) { this->bus = bus; }
 
@@ -90,6 +101,8 @@ public:
 
   // Advance by one clock cycle (1/3 of a CPU cycle, 1 pixel)
   void Clock();
+
+  Texture& GetFrameBufferTexture() { return frame_buffer; }
 
   std::function<void()> endFrameCallBack;
   void SetEndFrameCallBack(std::function<void()> endFrameCallBack)

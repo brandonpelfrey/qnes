@@ -1,15 +1,26 @@
 #include "./ppu.h"
 #include "core/bus.h"
 
+// NES Framebuffer/Screen size
+const int WIDTH = 256;
+const int HEIGHT = 240;
+
 PPU::PPU()
 {
-  scanline = 0;
+  pixel_y = 0;
   pixel_x = 0;
 
   PPUSTATUS = 0;
   PPUCTRL = 0;
 
-  ppu_scroll_input_xy = 0;
+  address_latch = 0;
+  vram = new u8[0x4000];
+  frame_buffer = Texture(WIDTH, HEIGHT);
+}
+
+PPU::~PPU()
+{
+  delete[] vram;
 }
 
 u8 PPU::Read(u16 addr)
@@ -18,21 +29,37 @@ u8 PPU::Read(u16 addr)
   {
     return PPUCTRL;
   }
-  if (addr == 0x2002)
+  else if (addr == 0x2002)
   {
     u8 result = PPUSTATUS;
 
     VerticalBlank = 0; // Clear Vertical blank on PPUStatus read.
-                       // TODO : clear address latch
+    address_latch = 0;
 
     if (result)
       printf("Read to PPUSTatus: %02X\n", result);
     return result;
   }
+  else if (addr == 0x2007)
+  {
+
+    // Read @ vram_addr pointer
+    if (vram_addr & 0xFF00 != 0x3F00) //
+    {
+      //u8 return_value = PPU_DATA_read_buffer;
+      //PPU_DATA_read_buffer = VRAM[vram_addr];
+      //return return_value;
+    }
+    else
+    {
+    }
+
+    assert(0);
+  }
   else
   {
     printf("Unimplemmented PPU read @ 0x%04X\n", addr);
-    assert(0);
+    //assert(0);
     return 0;
   }
 }
@@ -54,13 +81,46 @@ void PPU::Write(u16 addr, u8 val)
   {
     PPUMASK = val;
   }
-  else if (addr = 0x2005)
+  else if (addr == 0x2003)
   {
-    if (ppu_scroll_input_xy)
+    OAMADDR = val;
+  }
+  else if (addr == 0x2005)
+  {
+    if (address_latch == 0)
+    {
       scroll_x = val;
+      address_latch = 1;
+    }
     else
+    {
       scroll_y = val;
-    ppu_scroll_input_xy = !ppu_scroll_input_xy;
+      address_latch = 0;
+    }
+  }
+  else if (addr == 0x2006) // PPUADDR
+  {
+    if (address_latch == 0)
+    {
+      vram_addr = (u16)(val & 0x3F) << 8;
+      address_latch = 1;
+    }
+    else
+    {
+      vram_addr = vram_addr | (val & 0xFF);
+      address_latch = 0;
+      printf("ADDR = 0x%04X\n", vram_addr);
+    }
+  }
+  else if (addr == 0x2007) // PPUDATA
+  {
+    // Write the value currently pointed at by the internal address latch,
+    // then increment based on bit 2 of PPUCTRL
+
+    vram[vram_addr] = val;
+    //printf("PPU Data 0x%02X -> 0x%04X\n", val, vram_addr);
+    u8 addr_increment = VRAMAddressIncrement ? 32 : 1;
+    vram_addr = (vram_addr + addr_increment) & 0x3FFF;
   }
   else if (addr == 0x4014)
   {
@@ -70,7 +130,9 @@ void PPU::Write(u16 addr, u8 val)
     u16 page = (u16)(val) << 8;
     for (int i = 0; i < 256; ++i)
     {
-      OAM_RAM[i & 0xFF] = bus->Read(page | ((i + OAMADDR) & 0xFF));
+      OAM_RAM[i & 0xFF] = bus->Read(page | ((OAMADDR)&0xFF));
+      //vram[i & 0xFF] = OAM_RAM[i & 0xFF];
+      OAMADDR++;
     }
 
     // TODO : This is not-cycle accurate.
@@ -92,10 +154,10 @@ void PPU::Clock()
   const u16 LAST_VERTICAL_BLANK_LINE = 260;
 
   // The second tick of scanline 241 sets VBlank flag, and also triggers NMI
-  if (scanline == FIRST_VERTICAL_BLANK_LINE && pixel_x == 1)
+  if (pixel_y == FIRST_VERTICAL_BLANK_LINE && pixel_x == 1)
   {
     VerticalBlank = 1;
-    printf("scanline %u -- PPUSTATUS = 0x%02X\n", scanline, PPUSTATUS);
+    printf("scanline %u -- PPUSTATUS = 0x%02X\n", pixel_y, PPUSTATUS);
   }
 
   // This is separated from when we enter Vertical Blank, because if a user does not
@@ -107,11 +169,14 @@ void PPU::Clock()
     bus->TriggerNMI();
   }
 
-  if (scanline == PRE_RENDER_SCANLINE && pixel_x == 1)
+  if (pixel_y == PRE_RENDER_SCANLINE && pixel_x == 1)
   {
     VerticalBlank = 0;
     nmi_latch = 0; // Reset NMI latch
   }
+
+  // TODO : Actual render pixel
+  render_pixel();
 
   // Advance pixels/scanlines
   pixel_x++;
@@ -119,16 +184,42 @@ void PPU::Clock()
   {
     pixel_x = 0;
 
-    scanline++;
+    pixel_y++;
 
-    if (scanline == PRE_RENDER_SCANLINE)
+    if (pixel_y == PRE_RENDER_SCANLINE)
     {
       endFrameCallBack();
     }
 
-    if (scanline == PRE_RENDER_SCANLINE + 1)
+    if (pixel_y == PRE_RENDER_SCANLINE + 1)
     {
-      scanline = 0;
+      pixel_y = 0;
     }
   }
+}
+
+void PPU::render_pixel()
+{
+  u8 val = 0;
+
+  u8 *pixels = frame_buffer.Data();
+  if (pixel_x >= WIDTH || pixel_y >= HEIGHT)
+    return;
+
+  u32 pixel_num = WIDTH * pixel_y + pixel_x;
+  u32 q = pixel_y * WIDTH + pixel_x;
+  q /= 2;
+
+  if (q < 0x2000)
+    bus->GetCartridge()->PPURead(q, val);
+  else if (q < 0x3000)
+    val = vram[q - 0x2000];
+  else
+    val = 0;
+
+  val = val ? 255 : 0;
+
+  pixels[3 * pixel_num] = val;
+  pixels[3 * pixel_num + 1] = val;
+  pixels[3 * pixel_num + 2] = val;
 }

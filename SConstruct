@@ -17,11 +17,10 @@ qnes.Append(CPPFLAGS = ['-I./src'])
 
 if sys.platform == 'darwin':
   qnes.Append(LIBPATH=['/usr/local/lib'])
-  qnes.Append(LIBS=['SDL2'])
+  #qnes.Append(LIBS=['SDL2'])
   qnes.Append(CPPFLAGS=['-I/usr/local/include/'])
-
-  env.ParseConfig('sdl2-config --cflags --libs')
-
+  qnes.ParseConfig('sdl2-config --cflags --libs')
+  qnes.Append(FRAMEWORKS=' OpenGL')
 else:
   print('%s is not a supported platform. Please modify the SConstruct file' % (sys.platform))
   sys.exit(1)

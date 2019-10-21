@@ -5,6 +5,9 @@
 class Mapper_NROM : public Cartridge
 {
 public:
-  u8 Read(u16 addr) final;
-  void Write(u16 addr, u8 val) final;
+  bool CPURead(u16 addr, u8 &val) final;
+  bool CPUWrite(u16 addr, u8 val) final;
+
+  bool PPURead(u16 addr, u8 &val) final;
+  bool PPUWrite(u16 addr, u8 val) final;
 };

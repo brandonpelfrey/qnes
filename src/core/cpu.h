@@ -107,6 +107,7 @@ private:
   u8 BRK();
   u8 CMP();
   u8 CPX();
+  u8 CPY();
   u8 DEC();
   u8 EOR();
 

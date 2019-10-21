@@ -77,6 +77,11 @@ CPU::CPU()
   instructions[0xE4] = {"CPX", &CPU::CPX, &CPU::addr_zeropage, 3};
   instructions[0xEC] = {"CPX", &CPU::CPX, &CPU::addr_absolute, 4};
 
+  // CPY
+  instructions[0xC0] = {"CPY", &CPU::CPY, &CPU::addr_immediate, 2};
+  instructions[0xC4] = {"CPY", &CPU::CPY, &CPU::addr_zeropage, 3};
+  instructions[0xCC] = {"CPY", &CPU::CPY, &CPU::addr_absolute, 4};
+
   // DEC
   instructions[0xC6] = {"DEC", &CPU::DEC, &CPU::addr_zeropage, 5};
   instructions[0xD6] = {"DEC", &CPU::DEC, &CPU::addr_zeropage_x, 6};
@@ -364,6 +369,16 @@ u8 CPU::CPX()
   //printf("CPX temp=%u, C=%u\n", temp, C);
   return 0;
 }
+
+u8 CPU::CPY()
+{
+  u8 temp = y + 1 + ~read(addr_abs);
+  SetNZ(temp);
+  C = y >= fetched_data ? 1 : 0;
+  //printf("CPX temp=%u, C=%u\n", temp, C);
+  return 0;
+}
+
 u8 CPU::DEC()
 {
   u8 temp = read(addr_abs);
@@ -724,8 +739,8 @@ u8 CPU::addr_absolute_x()
   u8 low = read(pc++);
   u8 high = read(pc++);
   addr_abs = (high << 8) | low;
-
   addr_abs += x;
+
   bool crossed_page = addr_abs & 0xFF00 != (high << 8);
   return crossed_page ? 1 : 0;
 }
@@ -736,8 +751,8 @@ u8 CPU::addr_absolute_y()
   u8 low = read(pc++);
   u8 high = read(pc++);
   addr_abs = (high << 8) | low;
-
   addr_abs += y;
+
   bool crossed_page = addr_abs & 0xFF00 != (high << 8);
   return crossed_page ? 1 : 0;
 }
@@ -746,24 +761,41 @@ u8 CPU::addr_indirect()
 {
   u8 high = read(pc++);
   u8 low = read(pc++);
-  u16 ptr_addr = (high << 8) | low;
+  u16 ptr = (high << 8) | low;
 
-  addr_abs = read(ptr_addr);
-  addr_abs |= (u16)read(ptr_addr + 1) << 8;
+  if (low == 0x00FF) // Simulate page boundary hardware bug
+	{
+		addr_abs = (read(ptr & 0xFF00) << 8) | read(ptr + 0);
+	}
+	else // Behave normally
+	{
+		addr_abs = (read(ptr + 1) << 8) | read(ptr + 0);
+	}
+
+  return 0;
 }
 
 u8 CPU::addr_indirect_x()
 {
-  u16 ptr_addr = (read(pc++) + x) & 0xFF;
+  u16 ptr_addr = read(pc++) & 0xFF;
 
-  addr_abs = read(ptr_addr);
-  addr_abs |= (u16)read(ptr_addr + 1) << 8;
+  u8 low = read((ptr_addr + x) & 0xFF);
+  u8 high = read((ptr_addr + x + 1) & 0xFF);
+  addr_abs = (high << 8) | low;
+  return 0;
 }
+
 u8 CPU::addr_indirect_y()
 {
-  u16 ptr_addr = read(pc++) & 0xFF;
-  addr_abs = read(ptr_addr + y);
-  addr_abs |= (u16)read(ptr_addr + 1) << 8;
+  u16 t = read(pc++) & 0xFF;
+
+  u16 low = read(t & 0xFF);
+  u16 high = read((t + 1) & 0xFF);
+
+  addr_abs = (high << 8) | low;
+  addr_abs += y;
+
+  return (addr_abs >> 8) != high ? 1 : 0;
 }
 
 u8 CPU::read(u16 addr)
@@ -773,6 +805,15 @@ u8 CPU::read(u16 addr)
 
 void CPU::write(u16 addr, u8 val)
 {
+  if(val == 0xC6 && addr == 0x0003)
+  {
+    assert(0);
+  }
+
+  if (addr == 0x2006)
+  {
+    printf("Write to PPUADDR %02X\n", val);
+  }
   bus->Write(addr, val);
 }
 
@@ -803,6 +844,18 @@ void CPU::Clock()
 
 int CPU::Step()
 {
+  //if(abs(pc - 0xF1EF) < 5)
+  if(pc >= 0xC815 && pc <= 0xC820)
+    Debug();
+
+  static int count = 0;
+  if (pc == 0xF1F5)
+  {
+    count++;
+    if (count == 5)
+    ;//  assert(0);
+  }
+
   int total_step_cycles = 0;
 
   // Finish any remaining instruction which was already in flight
@@ -831,6 +884,7 @@ void CPU::TriggerNMI()
   push((pc >> 8) & 0xFF);
   push(p);
   pc = read16(0xFFFA);
+  printf("NMI @ 0x%04X\n", pc);
 }
 
 u16 CPU::read16(u16 addr)
@@ -944,6 +998,10 @@ void CPU::Debug()
       printf("%02X ", read(q));
     }
   }
+
+  printf(" -- ZP ");
+  for(int i=0; i<6; ++i)
+  printf("%02X ", read(i));
 
   printf("\n");
 }

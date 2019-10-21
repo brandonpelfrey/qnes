@@ -3,7 +3,12 @@
 
 u8 Bus::Read(u16 address, bool affects_state)
 {
-  if (address < 0x2000)
+  u8 val;
+  if (cartridge->CPURead(address, val))
+  {
+    return val;
+  }
+  else if (address < 0x2000)
   {
     // 2KB of memory @ range [0,0x7FF], mirrored 3 more times
     return RAM[address & 0x7FF];
@@ -22,6 +27,7 @@ u8 Bus::Read(u16 address, bool affects_state)
   {
     printf("Controllers queried\n");
     // TODO : controllers->GetJoypad();
+    return 0;
   }
   else if (address < 0x4020)
   {
@@ -29,15 +35,14 @@ u8 Bus::Read(u16 address, bool affects_state)
     // https://wiki.nesdev.com/w/index.php/CPU_Test_Mode
     return 0;
   }
-  else
-  {
-    return cartridge->Read(address);
-  }
 }
 
 void Bus::Write(u16 address, u8 val)
 {
-  if (address < 0x2000)
+  if (cartridge->CPUWrite(address, val))
+  {
+  }
+  else if (address < 0x2000)
   {
     address &= 0x7FF;
     RAM[address] = val;
