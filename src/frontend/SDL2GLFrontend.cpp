@@ -9,7 +9,7 @@ SDL2GLFrontend::SDL2GLFrontend() noexcept
 {
   should_close = false;
 
-  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0)
+  if (SDL_Init(SDL_INIT_EVERYTHING) != 0)
   {
     printf("Error: %s\n", SDL_GetError());
     exit(-1);
@@ -27,6 +27,7 @@ SDL2GLFrontend::SDL2GLFrontend() noexcept
   SDL_GL_MakeCurrent(window, gl_context);
   SDL_GL_SetSwapInterval(1); // Enable vsync
 
+  glEnable(GL_TEXTURE_2D);
   glGenTextures(1, &framebuffer_texture);
 }
 
@@ -34,20 +35,23 @@ void SDL2GLFrontend::MainLoop()
 {
   while (!should_close)
   {
+    SDL_Delay(1);
     console->StepFrame();
 
     // Grab framebuffer
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, framebuffer_texture);
-    Texture &framebuffer = console->GetFrameBuffer();
-    u8 *framebuffer_data = framebuffer.Data();
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, framebuffer.GetWidth(), framebuffer.GetHeight(), 0, GL_RGB, GL_UNSIGNED_BYTE, framebuffer_data);
+    Texture &display(console->GetPPU()->GetPatternTableLeftTexture());
+    u8 *display_data = display.Data();
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, display.GetWidth(), display.GetHeight(), 0, GL_RGB, GL_UNSIGNED_BYTE, display_data);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
     static char title[256];
     sprintf(title, "Frames: %u", console->GetFrameCount());
     SDL_SetWindowTitle(window, title);
+
+    glViewport(0,0,1280, 720);
 
     SDL_Event event;
     while (SDL_PollEvent(&event))

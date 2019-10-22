@@ -86,9 +86,13 @@ private:
 
   // 16KB address space, some of it is mirrors.
   u8 *vram;
+
   Texture frame_buffer;
+  Texture pattern_left;
+  Texture pattern_right;
 
   void render_pixel();
+  void render_pattern_tables();
 
 public:
   PPU();
@@ -103,6 +107,7 @@ public:
   void Clock();
 
   Texture& GetFrameBufferTexture() { return frame_buffer; }
+  Texture& GetPatternTableLeftTexture() { return pattern_left; }
 
   std::function<void()> endFrameCallBack;
   void SetEndFrameCallBack(std::function<void()> endFrameCallBack)

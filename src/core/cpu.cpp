@@ -263,7 +263,7 @@ void CPU::SetNZ(u8 value)
 u8 CPU::ADC()
 {
   u8 arg = read(addr_abs);
-  u16 result = +C + a;
+  u16 result = arg + C + a;
 
   // If both inputs had the same sign but the result has a different sign, then set V.
   bool overflowCheck = (a & 0x80) == (arg & 0x80) && (a & 0x80) != (result & 0x80);
@@ -764,13 +764,13 @@ u8 CPU::addr_indirect()
   u16 ptr = (high << 8) | low;
 
   if (low == 0x00FF) // Simulate page boundary hardware bug
-	{
-		addr_abs = (read(ptr & 0xFF00) << 8) | read(ptr + 0);
-	}
-	else // Behave normally
-	{
-		addr_abs = (read(ptr + 1) << 8) | read(ptr + 0);
-	}
+  {
+    addr_abs = (read(ptr & 0xFF00) << 8) | read(ptr + 0);
+  }
+  else // Behave normally
+  {
+    addr_abs = (read(ptr + 1) << 8) | read(ptr + 0);
+  }
 
   return 0;
 }
@@ -805,11 +805,6 @@ u8 CPU::read(u16 addr)
 
 void CPU::write(u16 addr, u8 val)
 {
-  if(val == 0xC6 && addr == 0x0003)
-  {
-    assert(0);
-  }
-
   if (addr == 0x2006)
   {
     printf("Write to PPUADDR %02X\n", val);
@@ -845,7 +840,7 @@ void CPU::Clock()
 int CPU::Step()
 {
   //if(abs(pc - 0xF1EF) < 5)
-  if(pc >= 0xC815 && pc <= 0xC820)
+  if (pc >= 0xC815 && pc <= 0xC820)
     Debug();
 
   static int count = 0;
@@ -853,7 +848,7 @@ int CPU::Step()
   {
     count++;
     if (count == 5)
-    ;//  assert(0);
+      ; //  assert(0);
   }
 
   int total_step_cycles = 0;
@@ -1000,8 +995,8 @@ void CPU::Debug()
   }
 
   printf(" -- ZP ");
-  for(int i=0; i<6; ++i)
-  printf("%02X ", read(i));
+  for (int i = 0; i < 6; ++i)
+    printf("%02X ", read(i));
 
   printf("\n");
 }

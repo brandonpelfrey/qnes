@@ -33,4 +33,5 @@ public:
   u64 GetCPUClockCount() const { return cpu_clock_count; }
   u32 GetFrameCount() const { return frame_count; }
   Texture& GetFrameBuffer() { return ppu->GetFrameBufferTexture(); }
+  std::shared_ptr<PPU> GetPPU() { return ppu; }
 };
