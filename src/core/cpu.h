@@ -49,7 +49,6 @@ private:
   u8 opcode;
   u16 addr_rel, addr_abs;
   u8 fetched_data;
-  u8 scratch_u8;
 
   union {
     u8 P;

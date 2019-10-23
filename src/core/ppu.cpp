@@ -51,7 +51,7 @@ u8 PPU::Read(u16 addr)
   {
 
     // Read @ vram_addr pointer
-    if (vram_addr & 0xFF00 != 0x3F00) //
+    if ((vram_addr & 0xFF00) != 0x3F00) //
     {
       //u8 return_value = PPU_DATA_read_buffer;
       //PPU_DATA_read_buffer = VRAM[vram_addr];
@@ -75,7 +75,7 @@ void PPU::Write(u16 addr, u8 val)
 {
   if (addr == 0x2000)
   {
-    bool is_0_to_1_nmigen = (PPUCTRL & 7 == 0) && (val & 7);
+    bool is_0_to_1_nmigen = ((PPUCTRL & 7) == 0) && (val & 7);
     if (VerticalBlank && GenerateNMIOnVBI && is_0_to_1_nmigen)
     {
       nmi_latch = 1;
@@ -154,11 +154,11 @@ void PPU::Write(u16 addr, u8 val)
 void PPU::Clock()
 {
   const u16 PRE_RENDER_SCANLINE = 261;
-  const u16 FIRST_VISIBLE_SCANLINE = 0;
-  const u16 LAST_VISIBLE_SCANLINE = 239;
-  const u16 POST_RENDER_SCANLINE = 240;
+  //const u16 FIRST_VISIBLE_SCANLINE = 0;
+  //const u16 LAST_VISIBLE_SCANLINE = 239;
+  //const u16 POST_RENDER_SCANLINE = 240;
   const u16 FIRST_VERTICAL_BLANK_LINE = 241;
-  const u16 LAST_VERTICAL_BLANK_LINE = 260;
+  //const u16 LAST_VERTICAL_BLANK_LINE = 260;
 
   // The second tick of scanline 241 sets VBlank flag, and also triggers NMI
   if (pixel_y == FIRST_VERTICAL_BLANK_LINE && pixel_x == 1)
@@ -220,8 +220,8 @@ void PPU::render_pattern_tables()
   // +--------------- 0: Pattern table is at $0000-$1FFF
 
   u8 *pattern_left_ptr = pattern_left.Data();
-  u16 HALF_MASK = 0b0001000000000000;
-  u16 vram_addr;
+  //u16 HALF_MASK = 0b0001000000000000;
+  //u16 vram_addr;
 
   for (int j = 0; j < 128; ++j)
   {

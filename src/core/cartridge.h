@@ -25,7 +25,7 @@ public:
   static Cartridge *LoadRomFile(const char *path);
   const CartridgeDescription &GetDescription() const { return description; }
 
-  ~Cartridge()
+  virtual ~Cartridge()
   {
     delete[] PRG_ROM;
     delete[] CHR_ROM;

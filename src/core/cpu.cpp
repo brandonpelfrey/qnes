@@ -350,7 +350,9 @@ u8 CPU::BNE() { return branchBaseInstruction(Z == 0); }
 // Branch on equal
 u8 CPU::BEQ() { return branchBaseInstruction(Z == 1); }
 
-u8 CPU::BRK() {}
+u8 CPU::BRK() {
+  assert(0 && "BRK unimplemented");
+}
 
 u8 CPU::CMP()
 {
@@ -442,6 +444,7 @@ u8 CPU::INC()
 u8 CPU::JMP()
 {
   pc = addr_abs;
+  return 0;
 }
 
 u8 CPU::JSR()
@@ -451,6 +454,7 @@ u8 CPU::JSR()
   push(pc_for_jsr_instruction & 0xFF);
 
   pc = addr_abs;
+  return 0;
 }
 u8 CPU::LDA()
 {
@@ -563,6 +567,7 @@ u8 CPU::ROL()
     a = val;
   else
     write(addr_abs, val);
+    return 0;
 }
 
 u8 CPU::ROR()
@@ -584,6 +589,7 @@ u8 CPU::ROR()
     a = val;
   else
     write(addr_abs, val);
+    return 0;
 }
 
 u8 CPU::RTI()
@@ -593,6 +599,7 @@ u8 CPU::RTI()
   u16 high = pop() & 0xFF;
   u16 low = pop() & 0xFF;
   pc = low | (high << 8);
+  return 0;
 }
 
 u8 CPU::RTS()
@@ -741,7 +748,7 @@ u8 CPU::addr_absolute_x()
   addr_abs = (high << 8) | low;
   addr_abs += x;
 
-  bool crossed_page = addr_abs & 0xFF00 != (high << 8);
+  bool crossed_page = (addr_abs & 0xFF00) != (high << 8);
   return crossed_page ? 1 : 0;
 }
 
@@ -753,7 +760,7 @@ u8 CPU::addr_absolute_y()
   addr_abs = (high << 8) | low;
   addr_abs += y;
 
-  bool crossed_page = addr_abs & 0xFF00 != (high << 8);
+  bool crossed_page = (addr_abs & 0xFF00) != (high << 8);
   return crossed_page ? 1 : 0;
 }
 

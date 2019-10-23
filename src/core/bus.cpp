@@ -35,6 +35,9 @@ u8 Bus::Read(u16 address, bool affects_state)
     // https://wiki.nesdev.com/w/index.php/CPU_Test_Mode
     return 0;
   }
+  else{
+    assert(0);
+  }
 }
 
 void Bus::Write(u16 address, u8 val)
@@ -64,7 +67,7 @@ void Bus::Write(u16 address, u8 val)
   }
   else
   {
-    printf("Unimplemented bus write @ 0x%04X\n", address);
+    //printf("Unimplemented bus write @ 0x%04X\n", address);
     //assert(0 && "Write not implemented outside ram");
   }
 }
