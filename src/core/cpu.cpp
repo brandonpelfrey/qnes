@@ -285,9 +285,9 @@ u8 CPU::AND()
 
 u8 CPU::ASL()
 {
-  u8 temp = fetched_data;
-  C = temp & 0x80 ? 1 : 0;
-  temp = (temp << 1) & 0xFF;
+  u8 fetched = read(addr_abs);
+  C = fetched & 0x80 ? 1 : 0;
+  u8 temp = (fetched << 1) & 0xFF;
   SetNZ(temp);
 
   if (instructions[opcode].addressing == &CPU::addr_implied)
@@ -299,9 +299,11 @@ u8 CPU::ASL()
 
 u8 CPU::BIT()
 {
-  u8 temp = a & fetched_data;
-  SetNZ(temp);
-  V = temp & 0x40 ? 1 : 0;
+  u8 fetched = read(addr_abs);
+  u8 temp = a & fetched;
+  Z = temp == 0 ? 1 : 0;
+  N = temp & (1 << 7) ? 1 : 0;
+  V = temp & (1 << 6) ? 1 : 0;
   return 0;
 }
 
@@ -350,14 +352,15 @@ u8 CPU::BNE() { return branchBaseInstruction(Z == 0); }
 // Branch on equal
 u8 CPU::BEQ() { return branchBaseInstruction(Z == 1); }
 
-u8 CPU::BRK() {
+u8 CPU::BRK()
+{
   assert(0 && "BRK unimplemented");
 }
 
 u8 CPU::CMP()
 {
   u8 arg = read(addr_abs);
-  u8 result = a + 1 + ~arg;
+  u8 result = a - arg;
   SetNZ(result);
   C = a >= arg ? 1 : 0;
   return 0;
@@ -365,19 +368,19 @@ u8 CPU::CMP()
 
 u8 CPU::CPX()
 {
-  u8 temp = x + 1 + ~read(addr_abs);
+  u8 temp = read(addr_abs);
+  temp = x - temp;
   SetNZ(temp);
   C = x >= fetched_data ? 1 : 0;
-  //printf("CPX temp=%u, C=%u\n", temp, C);
   return 0;
 }
 
 u8 CPU::CPY()
 {
-  u8 temp = y + 1 + ~read(addr_abs);
+  u8 temp = read(addr_abs);
+  temp = y - temp;
   SetNZ(temp);
   C = y >= fetched_data ? 1 : 0;
-  //printf("CPX temp=%u, C=%u\n", temp, C);
   return 0;
 }
 
@@ -389,6 +392,7 @@ u8 CPU::DEC()
   write(addr_abs, temp);
   return 0;
 }
+
 u8 CPU::EOR()
 {
   a ^= read(addr_abs);
@@ -449,13 +453,14 @@ u8 CPU::JMP()
 
 u8 CPU::JSR()
 {
-  u16 pc_for_jsr_instruction = pc - 1;
-  push(pc_for_jsr_instruction >> 8);
-  push(pc_for_jsr_instruction & 0xFF);
+  pc--;
+  push(pc >> 8);
+  push(pc & 0xFF);
 
   pc = addr_abs;
   return 0;
 }
+
 u8 CPU::LDA()
 {
   a = read(addr_abs);
@@ -479,11 +484,21 @@ u8 CPU::LDY()
 
 u8 CPU::LSR()
 {
-  u8 new_carry = a & 1;
-  a >>= 1;
-  C = new_carry;
-  N = 0;
-  Z = a == 0 ? 1 : 0;
+  u8 val;
+  if (instructions[opcode].addressing == &CPU::addr_implied)
+    val = a;
+  else
+    val = read(addr_abs);
+
+  C = val & 1;
+  val >>= 1;
+  SetNZ(val);
+
+  if (instructions[opcode].addressing == &CPU::addr_implied)
+    a = val;
+  else
+    write(addr_abs, val);
+
   return 0;
 }
 
@@ -556,10 +571,8 @@ u8 CPU::ROL()
   else
     val = read(addr_abs);
 
-  u8 newC = a >> 7;
-  val <<= 1;
-  val = (val & 0b11111110) | C;
-
+  u8 newC = val & 0x80;
+  val = (val << 1) | C;
   SetNZ(val);
   C = newC;
 
@@ -567,7 +580,7 @@ u8 CPU::ROL()
     a = val;
   else
     write(addr_abs, val);
-    return 0;
+  return 0;
 }
 
 u8 CPU::ROR()
@@ -578,9 +591,8 @@ u8 CPU::ROR()
   else
     val = read(addr_abs);
 
-  u8 newC = a & 1;
-  val >>= 1;
-  val = (val & 0b01111111) | (C << 7);
+  u8 newC = val & 1;
+  val = (val >> 1) | (C << 7);
 
   SetNZ(val);
   C = newC;
@@ -589,12 +601,14 @@ u8 CPU::ROR()
     a = val;
   else
     write(addr_abs, val);
-    return 0;
+  return 0;
 }
 
 u8 CPU::RTI()
 {
   p = pop();
+  B = 0;
+  U = 0;
 
   u16 high = pop() & 0xFF;
   u16 low = pop() & 0xFF;
@@ -617,7 +631,7 @@ u8 CPU::SBC()
   u16 result = arg + C + a;
 
   // If both inputs had the same sign but the result has a different sign, then set V.
-  bool overflowCheck = (a & 0x80) == (arg & 0x80) && (a & 0x80) != (result & 0x80);
+  bool overflowCheck = (result ^ a) & (result ^ arg) & 0x0080; //(a & 0x80) == (arg & 0x80) && (a & 0x80) != (result & 0x80);
 
   a = result & 0xFF;
   SetNZ(a);
@@ -661,20 +675,27 @@ u8 CPU::PLA()
 
 u8 CPU::PHP()
 {
+  B = 1;
+  U = 1;
   push(p);
+  B = 0;
+  U = 0;
   return 0;
 }
 
 u8 CPU::PLP()
 {
   p = pop();
+  U = 1;
   return 0;
 }
+
 u8 CPU::STX()
 {
   write(addr_abs, x);
   return 0;
 }
+
 u8 CPU::STY()
 {
   write(addr_abs, y);
@@ -696,12 +717,14 @@ u8 CPU::addr_immediate()
   pc++;
   return 0;
 }
+
 u8 CPU::addr_zeropage()
 {
   addr_abs = read(pc) & 0x00FF;
   pc++;
   return 0;
 }
+
 u8 CPU::addr_zeropage_x()
 {
   addr_abs = (read(pc) + x) & 0x00FF;
@@ -812,10 +835,6 @@ u8 CPU::read(u16 addr)
 
 void CPU::write(u16 addr, u8 val)
 {
-  if (addr == 0x2006)
-  {
-    printf("Write to PPUADDR %02X\n", val);
-  }
   bus->Write(addr, val);
 }
 

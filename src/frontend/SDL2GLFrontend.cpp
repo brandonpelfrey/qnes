@@ -41,8 +41,10 @@ void SDL2GLFrontend::MainLoop()
     // Grab framebuffer
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, framebuffer_texture);
-    Texture &display(console->GetPPU()->GetPatternTableLeftTexture());
+    //Texture &display(console->GetPPU()->GetPatternTableLeftTexture());
+    Texture &display(console->GetPPU()->GetFrameBufferTexture());
     u8 *display_data = display.Data();
+    //printf("%u x %u\n", display.GetWidth(), display.GetHeight());
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, display.GetWidth(), display.GetHeight(), 0, GL_RGB, GL_UNSIGNED_BYTE, display_data);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -50,8 +52,6 @@ void SDL2GLFrontend::MainLoop()
     static char title[256];
     sprintf(title, "Frames: %u", console->GetFrameCount());
     SDL_SetWindowTitle(window, title);
-
-    glViewport(0,0,1280, 720);
 
     SDL_Event event;
     while (SDL_PollEvent(&event))
@@ -65,21 +65,44 @@ void SDL2GLFrontend::MainLoop()
           should_close = true;
     }
 
-    //glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
+    // This is not equal to window size in high DPI mode, so need to use GL_GetDrawableSize.
+    int gl_drawable_width, gl_drawable_height;
+    SDL_GL_GetDrawableSize(window, &gl_drawable_width, &gl_drawable_height);
+    glViewport(0, 0, gl_drawable_width, gl_drawable_height);
+
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(-1, 1, -1, 1, 1, -1);
+
     glClearColor(1, 0, 1, 1);
     glClear(GL_COLOR_BUFFER_BIT);
 
+    // Combine the window aspect ratio and aspect ratio of the texture to be drawn
+    // to produce width and height variables in [0,1] which will fit inside
+    // a [-1,1] x [-1,1] square.
+    float window_aspect = (float)gl_drawable_width / (float)gl_drawable_height;
+    float texture_aspect = (float)display.GetWidth() / (float)display.GetHeight();
+    window_aspect /= texture_aspect;
+    float w = std::min(1.f, 1.f / window_aspect);
+    float h = std::min(1.f, 1.f * window_aspect);
+
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
     glBindTexture(GL_TEXTURE_2D, framebuffer_texture);
     glColor3f(1, 1, 1);
+
     glBegin(GL_QUADS);
     glTexCoord2f(0, 1);
-    glVertex2f(0, 0);
-    glTexCoord2f(0, 0);
-    glVertex2f(0, 1);
-    glTexCoord2f(1, 0);
-    glVertex2f(1, 1);
+    glVertex2f(-w, -h);
+
     glTexCoord2f(1, 1);
-    glVertex2f(1, 0);
+    glVertex2f(w, -h);
+
+    glTexCoord2f(1, 0);
+    glVertex2f(w, h);
+
+    glTexCoord2f(0, 0);
+    glVertex2f(-w, h);
     glEnd();
 
     //ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());

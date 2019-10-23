@@ -19,6 +19,7 @@ void Console::LoadROM(const char *path)
 {
   this->cartridge = std::shared_ptr<Cartridge>(Cartridge::LoadRomFile(path));
   this->bus->SetCartridge(this->cartridge);
+  this->ppu->SetCartridge(this->cartridge);
 }
 
 void Console::HardReset()

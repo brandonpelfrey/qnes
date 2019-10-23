@@ -1,5 +1,6 @@
 #include "./ppu.h"
 #include "core/bus.h"
+#include "core/cartridge.h"
 
 // Palettes
 // https://wiki.nesdev.com/w/index.php/PPU_palettes
@@ -116,7 +117,7 @@ void PPU::Write(u16 addr, u8 val)
     {
       vram_addr = vram_addr | (val & 0xFF);
       address_latch = 0;
-      printf("ADDR = 0x%04X\n", vram_addr);
+      //printf("ADDR = 0x%04X\n", vram_addr);
     }
   }
   else if (addr == 0x2007) // PPUDATA
@@ -125,7 +126,7 @@ void PPU::Write(u16 addr, u8 val)
     // then increment based on bit 2 of PPUCTRL
 
     vram[vram_addr] = val;
-    //printf("PPU Data 0x%02X -> 0x%04X\n", val, vram_addr);
+    printf("PPU Data Write 0x%02X -> 0x%04X\n", val, vram_addr);
     u8 addr_increment = VRAMAddressIncrement ? 32 : 1;
     vram_addr = (vram_addr + addr_increment) & 0x3FFF;
   }
@@ -206,6 +207,34 @@ void PPU::Clock()
   }
 }
 
+u8 PPU::ppuRead(u16 addr)
+{
+  u8 val;
+  if (cart->PPURead(addr, val))
+  {
+  }
+  else if (addr >= 0x0000 && addr < 0x2000)
+  {
+    return vram[addr];
+  }
+  else if (addr < 0x3F00)
+  {
+    u16 effective = addr & 0x2FFF;
+    bool is_horizontal = cart->GetDescription().HardwiredMirroringModeIsVertical;
+    if (is_horizontal)
+      effective &= addr < 0x2800 ? 0x23FF : 0x2BFF;
+    else
+      effective &= 0x27FF;
+    printf("NT Lookup @ 0x%04X -> 0x%02X\n", effective, vram[effective]);
+    return vram[effective];
+  }
+  else if (addr < 0x4000)
+  {
+    u16 effective = 0x3F00 | (addr & 0x00FF);
+    return vram[effective];
+  }
+}
+
 void PPU::render_pattern_tables()
 {
   // Pattern table entries
@@ -219,37 +248,40 @@ void PPU::render_pattern_tables()
   // |+-------------- H: Half of sprite table (0: "left"; 1: "right")
   // +--------------- 0: Pattern table is at $0000-$1FFF
 
-  u8 *pattern_left_ptr = pattern_left.Data();
-  //u16 HALF_MASK = 0b0001000000000000;
-  //u16 vram_addr;
+  Texture *pattern_textures[2] = {&pattern_left, &pattern_right};
 
-  for (int j = 0; j < 128; ++j)
+  for (int left_right = 0; left_right < 2; ++left_right)
   {
-    u16 tile_row = j / 8;
-    u16 fine_y = j & 7;
+    u8 *pattern_texture_data = pattern_textures[left_right]->Data();
 
-    for (int i = 0; i < 128; ++i)
+    for (int j = 0; j < 128; ++j)
     {
-      u16 tile_col = i / 8;
-      u16 fine_x = 7 - (i & 7);
+      u16 tile_row = j / 8;
+      u16 fine_y = j & 7;
 
-      auto chrrom = [&](u16 addr) -> u8 { u8 val; return bus->GetCartridge()->PPURead(addr, val)? val : 0; };
+      for (int i = 0; i < 128; ++i)
+      {
+        u16 tile_col = i / 8;
+        u16 fine_x = 7 - (i & 7);
 
-      u8 lo_bit = (chrrom((1 << 12) | (tile_row << 8) | (tile_col << 4) | 0b0000 | fine_y) >> fine_x) & 1;
-      u8 hi_bit = (chrrom((1 << 12) | (tile_row << 8) | (tile_col << 4) | 0b1000 | fine_y) >> fine_x) & 1;
+        auto chrrom = [&](u16 addr) -> u8 { u8 val; return bus->GetCartridge()->PPURead(addr, val)? val : 0; };
 
-      u8 pix_color = lo_bit | (hi_bit << 1);
-      u8 palette_number = 0;
-      u8 color_index = vram[pix_color == 0 ? 0x3F00 : 0x3F01 + 4 * palette_number + pix_color];
+        u8 lo_bit = (chrrom((left_right << 12) | (tile_row << 8) | (tile_col << 4) | 0b0000 | fine_y) >> fine_x) & 1;
+        u8 hi_bit = (chrrom((left_right << 12) | (tile_row << 8) | (tile_col << 4) | 0b1000 | fine_y) >> fine_x) & 1;
 
-      u8 r = PALETTE_BYTES[3 * color_index + 0];
-      u8 g = PALETTE_BYTES[3 * color_index + 1];
-      u8 b = PALETTE_BYTES[3 * color_index + 2];
+        u8 pix_color = lo_bit | (hi_bit << 1);
+        u8 palette_number = 0;
+        u8 color_index = vram[pix_color == 0 ? 0x3F00 : 0x3F01 + 4 * palette_number + pix_color];
 
-      u16 ptr_base = 3 * (j * 128 + i);
-      pattern_left_ptr[ptr_base + 0] = r;
-      pattern_left_ptr[ptr_base + 1] = g;
-      pattern_left_ptr[ptr_base + 2] = b;
+        u8 r = PALETTE_BYTES[3 * color_index + 0];
+        u8 g = PALETTE_BYTES[3 * color_index + 1];
+        u8 b = PALETTE_BYTES[3 * color_index + 2];
+
+        u16 ptr_base = 3 * (j * 128 + i);
+        pattern_texture_data[ptr_base + 0] = r;
+        pattern_texture_data[ptr_base + 1] = g;
+        pattern_texture_data[ptr_base + 2] = b;
+      }
     }
   }
 }
@@ -274,6 +306,28 @@ void PPU::render_pixel()
     val = 0;
 
   val = val ? 255 : 0;
+
+  ////////////////////////////////////////////////////
+
+  // Get background color
+  u16 offset_x = pixel_x + scroll_x;
+  u16 offset_y = pixel_y + scroll_y;
+
+  u8 tile_x = offset_x / 8;
+  u8 fine_x = offset_x & 7;
+
+  u8 tile_y = offset_y / 8;
+  u8 fine_y = offset_y & 7;
+
+  u8 lo_bit = (ppuRead((1 << 12) | (tile_y << 8) | (tile_x << 4) | 0b0000 | fine_y) >> fine_x) & 1;
+  u8 hi_bit = (ppuRead((1 << 12) | (tile_y << 8) | (tile_x << 4) | 0b1000 | fine_y) >> fine_x) & 1;
+  
+  val = lo_bit | (hi_bit << 1);
+  val = val ? 255 : 0;
+
+  // Get sprite color
+
+  // Combine
 
   pixels[3 * pixel_num] = val;
   pixels[3 * pixel_num + 1] = val;

@@ -6,6 +6,7 @@
 #include "core/texture.h"
 
 class Bus;
+class Cartridge;
 class PPU
 {
 private:
@@ -64,25 +65,7 @@ private:
     };
   };
 
-  union {
-    u8 OAMADDR;
-  };
-
-  union {
-    u8 OAMDATA;
-  };
-
-  union {
-    u8 PPUADDR;
-  };
-
-  union {
-    u8 PPUDATA;
-  };
-
-  union {
-    u8 OAMDMA;
-  };
+  u8 OAMADDR;
 
   // 16KB address space, some of it is mirrors.
   u8 *vram;
@@ -90,15 +73,19 @@ private:
   Texture frame_buffer;
   Texture pattern_left;
   Texture pattern_right;
+  std::shared_ptr<Cartridge> cart;
 
   void render_pixel();
   void render_pattern_tables();
+
+  u8 ppuRead(u16 addr);
 
 public:
   PPU();
   ~PPU();
 
   void SetBus(std::shared_ptr<Bus> bus) { this->bus = bus; }
+  void SetCartridge(std::shared_ptr<Cartridge> &cart) { this->cart = cart; }
 
   u8 Read(u16 addr);
   void Write(u16 addr, u8 val);
@@ -106,8 +93,8 @@ public:
   // Advance by one clock cycle (1/3 of a CPU cycle, 1 pixel)
   void Clock();
 
-  Texture& GetFrameBufferTexture() { return frame_buffer; }
-  Texture& GetPatternTableLeftTexture() { return pattern_left; }
+  Texture &GetFrameBufferTexture() { return frame_buffer; }
+  Texture &GetPatternTableLeftTexture() { return pattern_left; }
 
   std::function<void()> endFrameCallBack;
   void SetEndFrameCallBack(std::function<void()> endFrameCallBack)

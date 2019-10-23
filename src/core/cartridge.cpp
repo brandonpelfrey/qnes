@@ -37,7 +37,8 @@ Cartridge *Cartridge::LoadRomFile(const char *path)
   CartridgeDescription description;
   description.PRG_ROM_16KB_Multiple = header[4];
   description.CHR_ROM_8KB_Multiple = header[5];
-  description.HardwiredMirroringMode = header[6] & 1;
+  bool HardwiredMirroringModeIsVertical;
+  description.HardwiredMirroringModeIsVertical = header[6] & 1;
   description.HasBatteryBackedRAM = header[6] & 2;
   description.IgnoreMirroringControl = header[6] & 8;
   description.MapperNumber = (header[6] >> 4) | (header[7] & 0xF0);

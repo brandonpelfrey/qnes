@@ -8,7 +8,7 @@ struct CartridgeDescription
   u8 PRG_ROM_16KB_Multiple;
   u8 CHR_ROM_8KB_Multiple;
 
-  bool HardwiredMirroringMode;
+  bool HardwiredMirroringModeIsVertical;
   bool HasBatteryBackedRAM;
   bool IgnoreMirroringControl;
   u8 MapperNumber;
