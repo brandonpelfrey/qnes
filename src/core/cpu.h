@@ -168,4 +168,6 @@ public:
   void Reset();
   void SoftReset();
   void Debug();
+
+  void WTF();
 };

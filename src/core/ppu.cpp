@@ -44,8 +44,7 @@ u8 PPU::Read(u16 addr)
     VerticalBlank = 0; // Clear Vertical blank on PPUStatus read.
     address_latch = 0;
 
-    if (result)
-      printf("Read to PPUSTatus: %02X\n", result);
+    printf("Read to PPUSTatus: %02X\n", result);
     return result;
   }
   else if (addr == 0x2007)
@@ -72,18 +71,31 @@ u8 PPU::Read(u16 addr)
   }
 }
 
+static int counter = 0;
 void PPU::Write(u16 addr, u8 val)
 {
+  printf("0x%04X <- 0x%02X\n", addr, val);
   if (addr == 0x2000)
   {
-    bool is_0_to_1_nmigen = ((PPUCTRL & 7) == 0) && (val & 7);
+    bool is_0_to_1_nmigen = ((PPUCTRL & 0x80) == 0) && (val & 0x80);
     if (VerticalBlank && GenerateNMIOnVBI && is_0_to_1_nmigen)
     {
       nmi_latch = 1;
       bus->TriggerNMI();
     }
 
+    if (!is_0_to_1_nmigen)
+    {
+      counter++;
+      printf("Turned off NMI\n");
+      if (counter == 3)
+      {
+        //bus->GetCPU()->WTF();
+      }
+    }
+
     PPUCTRL = val;
+    GenerateNMIOnVBI = 1;
   }
   else if (addr == 0x2001)
   {
@@ -110,6 +122,11 @@ void PPU::Write(u16 addr, u8 val)
   {
     if (address_latch == 0)
     {
+      if (val < 0x10)
+      {
+        //bus->GetCPU()->WTF();
+      }
+
       vram_addr = (u16)(val & 0x3F) << 8;
       address_latch = 1;
     }
@@ -117,7 +134,7 @@ void PPU::Write(u16 addr, u8 val)
     {
       vram_addr = vram_addr | (val & 0xFF);
       address_latch = 0;
-      //printf("ADDR = 0x%04X\n", vram_addr);
+      printf("ADDR = 0x%04X\n", vram_addr);
     }
   }
   else if (addr == 0x2007) // PPUDATA
@@ -165,7 +182,7 @@ void PPU::Clock()
   if (pixel_y == FIRST_VERTICAL_BLANK_LINE && pixel_x == 1)
   {
     VerticalBlank = 1;
-    printf("scanline %u -- PPUSTATUS = 0x%02X\n", pixel_y, PPUSTATUS);
+    printf("scanline %u -- PPUSTATUS = 0x%02X, PPUCTRL = 0x%02X\n", pixel_y, PPUSTATUS, PPUCTRL);
   }
 
   // This is separated from when we enter Vertical Blank, because if a user does not
@@ -179,6 +196,7 @@ void PPU::Clock()
 
   if (pixel_y == PRE_RENDER_SCANLINE && pixel_x == 1)
   {
+    printf("ASDASD");
     VerticalBlank = 0;
     nmi_latch = 0; // Reset NMI latch
   }
@@ -191,7 +209,6 @@ void PPU::Clock()
   if (pixel_x == 341)
   {
     pixel_x = 0;
-
     pixel_y++;
 
     if (pixel_y == PRE_RENDER_SCANLINE)
@@ -212,6 +229,7 @@ u8 PPU::ppuRead(u16 addr)
   u8 val;
   if (cart->PPURead(addr, val))
   {
+    return val;
   }
   else if (addr >= 0x0000 && addr < 0x2000)
   {
@@ -295,17 +313,6 @@ void PPU::render_pixel()
     return;
 
   u32 pixel_num = WIDTH * pixel_y + pixel_x;
-  u32 q = pixel_y * WIDTH + pixel_x;
-  q /= 2;
-
-  if (q < 0x2000)
-    bus->GetCartridge()->PPURead(q, val);
-  else if (q < 0x3000)
-    val = vram[q - 0x2000];
-  else
-    val = 0;
-
-  val = val ? 255 : 0;
 
   ////////////////////////////////////////////////////
 
@@ -321,7 +328,9 @@ void PPU::render_pixel()
 
   u8 lo_bit = (ppuRead((1 << 12) | (tile_y << 8) | (tile_x << 4) | 0b0000 | fine_y) >> fine_x) & 1;
   u8 hi_bit = (ppuRead((1 << 12) | (tile_y << 8) | (tile_x << 4) | 0b1000 | fine_y) >> fine_x) & 1;
-  
+
+  auto chrrom = [&](u16 addr) -> u8 { u8 val; return bus->GetCartridge()->PPURead(addr, val)? val : 0; };
+
   val = lo_bit | (hi_bit << 1);
   val = val ? 255 : 0;
 

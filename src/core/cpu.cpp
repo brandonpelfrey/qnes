@@ -100,12 +100,12 @@ CPU::CPU()
 
   // Flag instructions
   instructions[0x18] = {"CLC", &CPU::CLC, &CPU::addr_implied, 2};
-  instructions[0x38] = {"SEC", &CPU::CLC, &CPU::addr_implied, 2};
-  instructions[0x58] = {"CLI", &CPU::CLC, &CPU::addr_implied, 2};
-  instructions[0x78] = {"SEI", &CPU::CLC, &CPU::addr_implied, 2};
-  instructions[0xB8] = {"CLV", &CPU::CLC, &CPU::addr_implied, 2};
-  instructions[0xD8] = {"CLD", &CPU::CLC, &CPU::addr_implied, 2};
-  instructions[0xF8] = {"SED", &CPU::CLC, &CPU::addr_implied, 2};
+  instructions[0x38] = {"SEC", &CPU::SEC, &CPU::addr_implied, 2};
+  instructions[0x58] = {"CLI", &CPU::CLI, &CPU::addr_implied, 2};
+  instructions[0x78] = {"SEI", &CPU::SEI, &CPU::addr_implied, 2};
+  instructions[0xB8] = {"CLV", &CPU::CLV, &CPU::addr_implied, 2};
+  instructions[0xD8] = {"CLD", &CPU::CLD, &CPU::addr_implied, 2};
+  instructions[0xF8] = {"SED", &CPU::SED, &CPU::addr_implied, 2};
 
   // INC
   instructions[0xE6] = {"INC", &CPU::INC, &CPU::addr_zeropage, 5};
@@ -369,6 +369,7 @@ u8 CPU::CMP()
 u8 CPU::CPX()
 {
   u8 temp = read(addr_abs);
+  u8 fetched_data = temp;
   temp = x - temp;
   SetNZ(temp);
   C = x >= fetched_data ? 1 : 0;
@@ -378,6 +379,7 @@ u8 CPU::CPX()
 u8 CPU::CPY()
 {
   u8 temp = read(addr_abs);
+  u8 fetched_data = temp;
   temp = y - temp;
   SetNZ(temp);
   C = y >= fetched_data ? 1 : 0;
@@ -491,7 +493,7 @@ u8 CPU::LSR()
     val = read(addr_abs);
 
   C = val & 1;
-  val >>= 1;
+  val = val >> 1;
   SetNZ(val);
 
   if (instructions[opcode].addressing == &CPU::addr_implied)
@@ -818,12 +820,12 @@ u8 CPU::addr_indirect_x()
 u8 CPU::addr_indirect_y()
 {
   u16 t = read(pc++) & 0xFF;
-
   u16 low = read(t & 0xFF);
   u16 high = read((t + 1) & 0xFF);
 
   addr_abs = (high << 8) | low;
-  addr_abs += y;
+  //addr_abs += y;
+  addr_abs = (addr_abs & 0xFF00) | ((low + y) & 0xFF);
 
   return (addr_abs >> 8) != high ? 1 : 0;
 }
@@ -863,19 +865,24 @@ void CPU::Clock()
   total_clock_cycles++;
 }
 
+bool WTF_MODE = true;
+const int WTF_LEN = 128;
+int WTF_PTR = 0;
+char WTF_BUFFER[1024][WTF_LEN];
+
+void CPU::WTF()
+{
+  for (int i = 0; i < WTF_LEN; ++i)
+  {
+    printf("WTF[%d] -- %s", 1+i-WTF_LEN, WTF_BUFFER[(WTF_PTR + i) % WTF_LEN]);
+    
+  }
+  exit(0);
+}
+
 int CPU::Step()
 {
-  //if(abs(pc - 0xF1EF) < 5)
-  if (pc >= 0xC815 && pc <= 0xC820)
-    Debug();
-
-  static int count = 0;
-  if (pc == 0xF1F5)
-  {
-    count++;
-    if (count == 5)
-      ; //  assert(0);
-  }
+  Debug();
 
   int total_step_cycles = 0;
 
@@ -1002,8 +1009,11 @@ void CPU::Debug()
     disassembly += sprintf(disassembly, "??? opcode 0x%02X", opcode);
   }
 
-  printf("%-20s ", disassembly_string);
-  printf(":: %010u :: AXYSP = %02X,%02X,%02X,%02X,%02X  --  ", total_clock_cycles, a, x, y, sp, p);
+  static char line_buffer[1024];
+  char *line_buffer_current = line_buffer;
+
+  line_buffer_current += sprintf(line_buffer_current, "%-20s ", disassembly_string);
+  line_buffer_current += sprintf(line_buffer_current, ":: %010u :: AXYSP = %02X,%02X,%02X,%02X,%02X  --  ", total_clock_cycles, a, x, y, sp, p);
 
   const int W = 3;
   for (int i = -W; i <= W; ++i)
@@ -1012,17 +1022,20 @@ void CPU::Debug()
 
     if (i == 0)
     {
-      printf("[%02X] ", read(q));
+      line_buffer_current += sprintf(line_buffer_current, "[%02X] ", read(q));
     }
     else
     {
-      printf("%02X ", read(q));
+      line_buffer_current += sprintf(line_buffer_current, "%02X ", read(q));
     }
   }
 
-  printf(" -- ZP ");
+  line_buffer_current += sprintf(line_buffer_current, " -- ZP ");
   for (int i = 0; i < 6; ++i)
-    printf("%02X ", read(i));
+    line_buffer_current += sprintf(line_buffer_current, "%02X ", read(i));
 
-  printf("\n");
+  line_buffer_current += sprintf(line_buffer_current, "\n");
+
+  memcpy(WTF_BUFFER[WTF_PTR], line_buffer, 1024);
+  WTF_PTR = (WTF_PTR + 1) % WTF_LEN;
 }
