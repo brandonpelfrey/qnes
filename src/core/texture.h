@@ -10,7 +10,7 @@ private:
 
 public:
   Texture() : width(0), height(0), data(nullptr) {}
-  
+
   Texture(int width, int height)
       : width(width), height(height)
   {

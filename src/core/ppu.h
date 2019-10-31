@@ -22,7 +22,7 @@ private:
 
   u16 vram_addr;
 
-  //u8 PPU_DATA_read_buffer;
+  u8 PPU_DATA_read_buffer;
   u8 OAM_RAM[256];
 
   union {

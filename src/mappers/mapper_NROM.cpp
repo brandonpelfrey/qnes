@@ -33,7 +33,7 @@ bool Mapper_NROM::CPUWrite(u16 addr, u8 val)
 
 bool Mapper_NROM::PPURead(u16 addr, u8 &val)
 {
-  if (addr <= 0x1FFF)
+  if (addr <= 0x2000)
   {
     val = CHR_ROM[addr];
     return true;

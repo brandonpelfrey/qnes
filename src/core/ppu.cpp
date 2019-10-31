@@ -18,6 +18,10 @@ PPU::PPU()
 
   PPUSTATUS = 0;
   PPUCTRL = 0;
+  PPUMASK = 0;
+  scroll_x = 0;
+  scroll_y = 0;
+  vram_addr = 0;
 
   address_latch = 0;
   vram = new u8[0x4000];
@@ -44,8 +48,10 @@ u8 PPU::Read(u16 addr)
     VerticalBlank = 0; // Clear Vertical blank on PPUStatus read.
     address_latch = 0;
 
-    printf("Read to PPUSTatus: %02X\n", result);
-    return result;
+    if (result)
+      printf("Read to PPUSTatus: %02X\n", result);
+
+    return (result & 0xE0) | (PPU_DATA_read_buffer & 0x1F);
   }
   else if (addr == 0x2007)
   {
@@ -142,7 +148,7 @@ void PPU::Write(u16 addr, u8 val)
     // Write the value currently pointed at by the internal address latch,
     // then increment based on bit 2 of PPUCTRL
 
-    vram[vram_addr] = val;
+    vram[vram_addr & 0x3FFF] = val;
     printf("PPU Data Write 0x%02X -> 0x%04X\n", val, vram_addr);
     u8 addr_increment = VRAMAddressIncrement ? 32 : 1;
     vram_addr = (vram_addr + addr_increment) & 0x3FFF;
@@ -201,7 +207,6 @@ void PPU::Clock()
     nmi_latch = 0; // Reset NMI latch
   }
 
-  // TODO : Actual render pixel
   render_pixel();
 
   // Advance pixels/scanlines
@@ -214,6 +219,21 @@ void PPU::Clock()
     if (pixel_y == PRE_RENDER_SCANLINE)
     {
       render_pattern_tables();
+
+      if (0)
+      {
+        printf("------------------\n");
+        for (int i = 0; i < 30; ++i)
+        {
+          for (int j = 0; j < 32; ++j)
+          {
+            printf("%02X ", ppuRead(0x2000 + i * 32 + j));
+          }
+          printf("\n");
+        }
+        printf("------------------\n");
+      }
+
       endFrameCallBack();
     }
 
@@ -233,6 +253,11 @@ u8 PPU::ppuRead(u16 addr)
   }
   else if (addr >= 0x0000 && addr < 0x2000)
   {
+    assert(0);
+    //return vram[addr];
+  }
+  else if (addr < 0x3000)
+  {
     return vram[addr];
   }
   else if (addr < 0x3F00)
@@ -250,6 +275,10 @@ u8 PPU::ppuRead(u16 addr)
   {
     u16 effective = 0x3F00 | (addr & 0x00FF);
     return vram[effective];
+  }
+  else
+  {
+    assert(0);
   }
 }
 
@@ -312,33 +341,59 @@ void PPU::render_pixel()
   if (pixel_x >= WIDTH || pixel_y >= HEIGHT)
     return;
 
-  u32 pixel_num = WIDTH * pixel_y + pixel_x;
-
   ////////////////////////////////////////////////////
 
+  if (ShowBGInLeftMost == 0 && pixel_x < 8)
+  {
+    // TODO : Draw BG color
+    return;
+  }
+
   // Get background color
-  u16 offset_x = pixel_x + scroll_x;
-  u16 offset_y = pixel_y + scroll_y;
+  u16 offset_x = (pixel_x + scroll_x) % 512;
+  u16 offset_y = (pixel_y + scroll_y) % 480;
 
-  u8 tile_x = offset_x / 8;
+  u8 nametable_tile_x = (offset_x / 8);
+  u8 nametable_tile_y = (offset_y / 8);
+
+  u16 nt_byte_addr = 0x2000 + nametable_tile_y * 32 + nametable_tile_x;
+  //printf("NTNT 0x%04X\n", nt_byte_addr);
+  u8 pattern_table_index = ppuRead(nt_byte_addr);
+
   u8 fine_x = offset_x & 7;
-
-  u8 tile_y = offset_y / 8;
   u8 fine_y = offset_y & 7;
 
-  u8 lo_bit = (ppuRead((1 << 12) | (tile_y << 8) | (tile_x << 4) | 0b0000 | fine_y) >> fine_x) & 1;
-  u8 hi_bit = (ppuRead((1 << 12) | (tile_y << 8) | (tile_x << 4) | 0b1000 | fine_y) >> fine_x) & 1;
+  //  printf("QQ - 0x%04X\n", (1 << 12) | (pattern_table_index << 4) | 0b0000 | fine_y);
 
-  auto chrrom = [&](u16 addr) -> u8 { u8 val; return bus->GetCartridge()->PPURead(addr, val)? val : 0; };
+  // PPUCTRL marks whether the background tiles from from the 'left' or 'right' pattern tables.
+  u16 bg_pattern_base = BGPatternTableAddress == 0 ? 0x0000 : 0x1000;
+
+  u8 lo_bit = (ppuRead(bg_pattern_base | (pattern_table_index << 4) | 0b0000 | fine_y) >> (7 - fine_x)) & 1;
+  u8 hi_bit = (ppuRead(bg_pattern_base | (pattern_table_index << 4) | 0b1000 | fine_y) >> (7 - fine_x)) & 1;
 
   val = lo_bit | (hi_bit << 1);
-  val = val ? 255 : 0;
 
   // Get sprite color
 
   // Combine
 
-  pixels[3 * pixel_num] = val;
-  pixels[3 * pixel_num + 1] = val;
-  pixels[3 * pixel_num + 2] = val;
+  const auto set_pixel_color = [&](int x, int y, u8 color_index) {
+    u32 pixel_num = WIDTH * y + x;
+
+    u8 r = PALETTE_BYTES[3 * color_index + 0];
+    u8 g = PALETTE_BYTES[3 * color_index + 1];
+    u8 b = PALETTE_BYTES[3 * color_index + 2];
+
+    pixels[3 * pixel_num] = r;
+    pixels[3 * pixel_num + 1] = g;
+    pixels[3 * pixel_num + 2] = b;
+  };
+
+  u8 palette_number = 0;
+  u8 color_index = val;
+  if (color_index == 0)
+    palette_number = 0;
+
+  u8 master_palette_index = ppuRead(0x3F00 + 4 * palette_number + color_index);
+  set_pixel_color(pixel_x, pixel_y, master_palette_index);
 }
