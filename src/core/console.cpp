@@ -4,7 +4,8 @@
 Console::Console()
     : bus(std::make_shared<Bus>()),
       cpu(std::make_shared<CPU>()),
-      ppu(std::make_shared<PPU>())
+      ppu(std::make_shared<PPU>()),
+      controllers(std::make_shared<Controllers>())
 {
   // Everything get's a pointer to the bus
   cpu->SetBus(bus);
@@ -13,6 +14,7 @@ Console::Console()
   // And the bus gets to point at everything
   bus->SetCPU(cpu);
   bus->SetPPU(ppu);
+  bus->SetControllers(controllers);
 }
 
 void Console::LoadROM(const char *path)
@@ -29,24 +31,30 @@ void Console::HardReset()
   cpu_clock_count = 0;
 }
 
+int Console::StepCPU()
+{
+  int cpuCycles = cpu->Step();
+  for (int ppu_cycles = 0; ppu_cycles < 3 * cpuCycles; ++ppu_cycles)
+  {
+    ppu->Clock();
+  }
+
+  return cpuCycles;
+}
+
 void Console::StepFrame()
 {
   int starting_frame_count = frame_count;
 
   ppu->SetEndFrameCallBack([&]() {
-    //printf("frame %u\n", frame_count);
     frame_count++;
   });
 
   while (frame_count == starting_frame_count)
   {
-    int cpuCycles = cpu->Step();
-    cpu_clock_count += cpuCycles;
-
-    for (int ppu_cycles = 0; ppu_cycles < 3 * cpuCycles; ++ppu_cycles)
-    {
-      ppu->Clock();
-    }
+    cpu_clock_count += StepCPU();
+    if (cpu->IsPaused())
+      break;
   }
 }
 

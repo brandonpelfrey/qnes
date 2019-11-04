@@ -22,6 +22,7 @@ public:
   void SetPPU(std::shared_ptr<PPU> ppu) { this->ppu = ppu; }
   void SetCartridge(std::shared_ptr<Cartridge> cartridge) { this->cartridge = cartridge; }
   std::shared_ptr<Cartridge> GetCartridge() { return cartridge; }
+
   void SetControllers(std::shared_ptr<Controllers> controllers) { this->controllers = controllers; }
 
   std::shared_ptr<CPU> &GetCPU() { return cpu; }

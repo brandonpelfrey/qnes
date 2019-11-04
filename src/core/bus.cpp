@@ -21,13 +21,11 @@ u8 Bus::Read(u16 address, bool affects_state)
   }
   else if (address >= 0x4000 && address < 0x4013)
   {
-    assert(0 && "APU and IO read not implemented");
+    //assert(0 && "APU and IO read not implemented");
   }
   else if (address == 0x4016 || address == 0x4017)
   {
-    printf("Controllers queried\n");
-    // TODO : controllers->GetJoypad();
-    return 0;
+    return controllers->ShiftJoyPadBit(address & 1);
   }
   else if (address < 0x4020)
   {
@@ -35,8 +33,9 @@ u8 Bus::Read(u16 address, bool affects_state)
     // https://wiki.nesdev.com/w/index.php/CPU_Test_Mode
     return 0;
   }
-  else{
-    assert(0);
+  else
+  {
+    //assert(0);
   }
 }
 
@@ -44,6 +43,7 @@ void Bus::Write(u16 address, u8 val)
 {
   if (cartridge->CPUWrite(address, val))
   {
+    return;
   }
   else if (address < 0x2000)
   {
@@ -61,14 +61,19 @@ void Bus::Write(u16 address, u8 val)
     // OAM DMA
     ppu->Write(address, val);
   }
+  else if(address <= 0x4015)
+  {
+    //
+  }
   else if (address == 0x4016 || address == 0x4017)
   {
-    controllers->StrobeJoyPad(val);
+    // TODO : this should actually look at the edge, but for now...
+    controllers->StrobeJoyPad(address & 1);
   }
   else
   {
-    //printf("Unimplemented bus write @ 0x%04X\n", address);
-    //assert(0 && "Write not implemented outside ram");
+    printf("Unimplemented bus write @ 0x%04X\n", address);
+   // assert(0 && "Write not implemented outside ram");
   }
 }
 

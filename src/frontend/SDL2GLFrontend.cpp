@@ -1,5 +1,6 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
+#include <unordered_map>
 #include <thread>
 
 #include "./SDL2GLFrontend.h"
@@ -36,7 +37,9 @@ void SDL2GLFrontend::MainLoop()
   while (!should_close)
   {
     SDL_Delay(1);
-    console->StepFrame();
+
+    if (!console->GetCPU()->IsPaused())
+      console->StepFrame();
 
     // Grab framebuffer
     glEnable(GL_TEXTURE_2D);
@@ -53,16 +56,50 @@ void SDL2GLFrontend::MainLoop()
     sprintf(title, "Frames: %u", console->GetFrameCount());
     SDL_SetWindowTitle(window, title);
 
+    std::unordered_map<unsigned, Controllers::ButtonMask> key_bindings = {
+        {SDLK_RETURN, Controllers::Start},
+        {SDLK_RSHIFT, Controllers::Select},
+        {SDLK_z, Controllers::A},
+        {SDLK_x, Controllers::B},
+        {SDLK_UP, Controllers::Up},
+        {SDLK_DOWN, Controllers::Down},
+        {SDLK_LEFT, Controllers::Left},
+        {SDLK_RIGHT, Controllers::Right},
+    };
+
     SDL_Event event;
     while (SDL_PollEvent(&event))
     {
-      //   ImGui_ImplSDL2_ProcessEvent(&event);
       if (event.type == SDL_QUIT)
         should_close = true;
 
       if (event.type == SDL_KEYDOWN)
-        if (event.key.keysym.sym == SDLK_ESCAPE)
+      {
+        switch (event.key.keysym.sym)
+        {
+        case SDLK_s:
+          console->StepCPU();
+          break;
+
+        case SDLK_ESCAPE:
           should_close = true;
+          break;
+        }
+      }
+
+      if (event.type == SDL_KEYDOWN)
+      {
+        for (const auto &binding : key_bindings)
+          if (event.key.keysym.sym == binding.first)
+            console->GetControllers()->SetButtonPressed(0, binding.second, 1);
+      }
+
+      if (event.type == SDL_KEYUP)
+      {
+        for (const auto &binding : key_bindings)
+          if (event.key.keysym.sym == binding.first)
+            console->GetControllers()->SetButtonPressed(0, binding.second, 0);
+      }
     }
 
     // This is not equal to window size in high DPI mode, so need to use GL_GetDrawableSize.

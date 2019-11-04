@@ -48,10 +48,7 @@ u8 PPU::Read(u16 addr)
     VerticalBlank = 0; // Clear Vertical blank on PPUStatus read.
     address_latch = 0;
 
-    if (result)
-      printf("Read to PPUSTatus: %02X\n", result);
-
-    return (result & 0xE0) | (PPU_DATA_read_buffer & 0x1F);
+    return (result & 0xe0) | (PPU_DATA_read_buffer & 0x1F);
   }
   else if (addr == 0x2007)
   {
@@ -59,15 +56,17 @@ u8 PPU::Read(u16 addr)
     // Read @ vram_addr pointer
     if ((vram_addr & 0xFF00) != 0x3F00) //
     {
-      //u8 return_value = PPU_DATA_read_buffer;
-      //PPU_DATA_read_buffer = VRAM[vram_addr];
-      //return return_value;
+      u8 return_value = PPU_DATA_read_buffer;
+      PPU_DATA_read_buffer = vram[vram_addr & 0x3FFF];
+      u8 addr_increment = VRAMAddressIncrement ? 32 : 1;
+      vram_addr = (vram_addr + addr_increment) & 0x3FFF;
+      return return_value;
     }
     else
     {
     }
 
-    assert(0);
+    //assert(0);
   }
   else
   {
@@ -80,28 +79,20 @@ u8 PPU::Read(u16 addr)
 static int counter = 0;
 void PPU::Write(u16 addr, u8 val)
 {
-  printf("0x%04X <- 0x%02X\n", addr, val);
+  printf("PPU WRITE() 0x%04X <- 0x%02X\n", addr, val);
+
   if (addr == 0x2000)
   {
+    /*
     bool is_0_to_1_nmigen = ((PPUCTRL & 0x80) == 0) && (val & 0x80);
-    if (VerticalBlank && GenerateNMIOnVBI && is_0_to_1_nmigen)
+    if (VerticalBlank && (nmi_latch == 0) && is_0_to_1_nmigen)
     {
       nmi_latch = 1;
       bus->TriggerNMI();
     }
-
-    if (!is_0_to_1_nmigen)
-    {
-      counter++;
-      printf("Turned off NMI\n");
-      if (counter == 3)
-      {
-        //bus->GetCPU()->WTF();
-      }
-    }
+    */
 
     PPUCTRL = val;
-    GenerateNMIOnVBI = 1;
   }
   else if (addr == 0x2001)
   {
@@ -128,19 +119,14 @@ void PPU::Write(u16 addr, u8 val)
   {
     if (address_latch == 0)
     {
-      if (val < 0x10)
-      {
-        //bus->GetCPU()->WTF();
-      }
-
-      vram_addr = (u16)(val & 0x3F) << 8;
+      vram_addr = (val & 0x7F) << 8;
       address_latch = 1;
     }
     else
     {
-      vram_addr = vram_addr | (val & 0xFF);
+      vram_addr = vram_addr | val;
       address_latch = 0;
-      printf("ADDR = 0x%04X\n", vram_addr);
+      //printf("ADDR = 0x%04X\n", vram_addr);
     }
   }
   else if (addr == 0x2007) // PPUDATA
@@ -149,7 +135,7 @@ void PPU::Write(u16 addr, u8 val)
     // then increment based on bit 2 of PPUCTRL
 
     vram[vram_addr & 0x3FFF] = val;
-    printf("PPU Data Write 0x%02X -> 0x%04X\n", val, vram_addr);
+    printf("PPU Data Write 0x%02X -> 0x%04X\n", val, vram_addr & 0x3FFF);
     u8 addr_increment = VRAMAddressIncrement ? 32 : 1;
     vram_addr = (vram_addr + addr_increment) & 0x3FFF;
   }
@@ -202,7 +188,6 @@ void PPU::Clock()
 
   if (pixel_y == PRE_RENDER_SCANLINE && pixel_x == 1)
   {
-    printf("ASDASD");
     VerticalBlank = 0;
     nmi_latch = 0; // Reset NMI latch
   }
@@ -219,21 +204,6 @@ void PPU::Clock()
     if (pixel_y == PRE_RENDER_SCANLINE)
     {
       render_pattern_tables();
-
-      if (0)
-      {
-        printf("------------------\n");
-        for (int i = 0; i < 30; ++i)
-        {
-          for (int j = 0; j < 32; ++j)
-          {
-            printf("%02X ", ppuRead(0x2000 + i * 32 + j));
-          }
-          printf("\n");
-        }
-        printf("------------------\n");
-      }
-
       endFrameCallBack();
     }
 
@@ -254,21 +224,19 @@ u8 PPU::ppuRead(u16 addr)
   else if (addr >= 0x0000 && addr < 0x2000)
   {
     assert(0);
-    //return vram[addr];
-  }
-  else if (addr < 0x3000)
-  {
-    return vram[addr];
   }
   else if (addr < 0x3F00)
   {
     u16 effective = addr & 0x2FFF;
     bool is_horizontal = cart->GetDescription().HardwiredMirroringModeIsVertical;
+
     if (is_horizontal)
-      effective &= addr < 0x2800 ? 0x23FF : 0x2BFF;
+      //effective = (addr < 0x2800) ? (0x2000 | (addr & 0x3FF)) : (0x2800 | (addr & 0x3FF));
+      effective &= 0xF7FF;
     else
-      effective &= 0x27FF;
-    printf("NT Lookup @ 0x%04X -> 0x%02X\n", effective, vram[effective]);
+      //effective &= 0x27FF;
+      effective &= 0xFBFF;
+
     return vram[effective];
   }
   else if (addr < 0x4000)
@@ -350,23 +318,38 @@ void PPU::render_pixel()
   }
 
   // Get background color
-  u16 offset_x = (pixel_x + scroll_x) % 512;
-  u16 offset_y = (pixel_y + scroll_y) % 480;
+  int ppu_scroll_x = scroll_x + ((PPUCTRL >> 0) & 1) * 256;
+  int ppu_scroll_y = scroll_y + ((PPUCTRL >> 1) & 1) * 240;
 
-  u8 nametable_tile_x = (offset_x / 8);
-  u8 nametable_tile_y = (offset_y / 8);
+  int which_nametable = 0;
+  int nametable_x = (ppu_scroll_x + pixel_x) % 512;
+  if (nametable_x >= 256)
+  {
+    which_nametable += 1;
+    nametable_x -= 256;
+  }
 
-  u16 nt_byte_addr = 0x2000 + nametable_tile_y * 32 + nametable_tile_x;
+  int nametable_y = (ppu_scroll_y + pixel_y) % 480;
+  if (nametable_y >= 240)
+  {
+    which_nametable += 2;
+    nametable_y -= 240;
+  }
+
+  int nametable_tile_x = nametable_x / 8;
+  int nametable_tile_y = nametable_y / 8;
+
+  int nametable_start = 0x2000 + 0x400 * which_nametable;
+
+  u16 nt_byte_addr = nametable_start + nametable_tile_y * 32 + nametable_tile_x;
   //printf("NTNT 0x%04X\n", nt_byte_addr);
-  u8 pattern_table_index = ppuRead(nt_byte_addr);
+  u16 pattern_table_index = ppuRead(nt_byte_addr);
 
-  u8 fine_x = offset_x & 7;
-  u8 fine_y = offset_y & 7;
-
-  //  printf("QQ - 0x%04X\n", (1 << 12) | (pattern_table_index << 4) | 0b0000 | fine_y);
+  u8 fine_x = nametable_x & 7;
+  u8 fine_y = nametable_y & 7;
 
   // PPUCTRL marks whether the background tiles from from the 'left' or 'right' pattern tables.
-  u16 bg_pattern_base = BGPatternTableAddress == 0 ? 0x0000 : 0x1000;
+  u16 bg_pattern_base = BGPatternTableAddress ? 0x1000 : 0x0000;
 
   u8 lo_bit = (ppuRead(bg_pattern_base | (pattern_table_index << 4) | 0b0000 | fine_y) >> (7 - fine_x)) & 1;
   u8 hi_bit = (ppuRead(bg_pattern_base | (pattern_table_index << 4) | 0b1000 | fine_y) >> (7 - fine_x)) & 1;
@@ -376,6 +359,11 @@ void PPU::render_pixel()
   // Get sprite color
 
   // Combine
+
+  u8 palette_number = 0;
+  u8 color_index = val;
+  if (color_index == 0)
+    palette_number = 0;
 
   const auto set_pixel_color = [&](int x, int y, u8 color_index) {
     u32 pixel_num = WIDTH * y + x;
@@ -388,11 +376,6 @@ void PPU::render_pixel()
     pixels[3 * pixel_num + 1] = g;
     pixels[3 * pixel_num + 2] = b;
   };
-
-  u8 palette_number = 0;
-  u8 color_index = val;
-  if (color_index == 0)
-    palette_number = 0;
 
   u8 master_palette_index = ppuRead(0x3F00 + 4 * palette_number + color_index);
   set_pixel_color(pixel_x, pixel_y, master_palette_index);

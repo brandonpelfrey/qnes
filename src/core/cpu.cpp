@@ -152,7 +152,9 @@ CPU::CPU()
   instructions[0x5E] = {"LSR", &CPU::LSR, &CPU::addr_absolute_x, 7};
 
   // NOP
+  instructions[0xDA] = {"NOP", &CPU::NOP, &CPU::addr_implied, 2};
   instructions[0xEA] = {"NOP", &CPU::NOP, &CPU::addr_implied, 2};
+  instructions[0xFA] = {"NOP", &CPU::NOP, &CPU::addr_implied, 2};
 
   // ORA
   instructions[0x09] = {"ORA", &CPU::ORA, &CPU::addr_immediate, 2};
@@ -230,6 +232,18 @@ CPU::CPU()
   instructions[0x84] = {"STY", &CPU::STY, &CPU::addr_zeropage, 3};
   instructions[0x94] = {"STY", &CPU::STY, &CPU::addr_zeropage_x, 4};
   instructions[0x8C] = {"STY", &CPU::STY, &CPU::addr_absolute, 4};
+
+  in_step_mode = false;
+}
+
+void CPU::Pause()
+{
+  in_step_mode = true;
+}
+
+void CPU::Continue()
+{
+  in_step_mode = false;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -237,41 +251,54 @@ CPU::CPU()
 
 void CPU::Reset()
 {
-  p = 0x34;
+  p = 0x24;
   a = x = y = 0;
   sp = 0xFD;
 
   pc = read(0xFFFC) | (read(0xFFFD) << 8);
 }
 
-void CPU::SoftReset()
+void CPU::SoftReset(u16 newpc)
 {
   Reset();
-  // TODO
+  pc = newpc;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
 // Instruction Implementations
 
+void CPU::SetFlag(Flags flag, u8 value)
+{
+  if (value != 0)
+    p |= flag;
+  else
+    p &= (~flag) & 0xFF;
+}
+
+u8 CPU::GetFlag(Flags flag)
+{
+  return p & flag ? 1 : 0;
+}
+
 // This is such a common thing in instructions, that we'll just wrap this into one function.
 void CPU::SetNZ(u8 value)
 {
-  N = value & 0x80 ? 1 : 0;
-  Z = value == 0 ? 1 : 0;
+  SetFlag(N, value & 0x80);
+  SetFlag(Z, value == 0);
 }
 
 u8 CPU::ADC()
 {
   u8 arg = read(addr_abs);
-  u16 result = arg + C + a;
+  u16 result = arg + GetFlag(C) + a;
 
   // If both inputs had the same sign but the result has a different sign, then set V.
   bool overflowCheck = (a & 0x80) == (arg & 0x80) && (a & 0x80) != (result & 0x80);
 
   a = result & 0xFF;
   SetNZ(a);
-  C = result > 0xFF ? 1 : 0;
-  V = overflowCheck ? 1 : 0;
+  SetFlag(C, result > 0xFF);
+  SetFlag(V, overflowCheck);
 
   return 0;
 }
@@ -286,7 +313,7 @@ u8 CPU::AND()
 u8 CPU::ASL()
 {
   u8 fetched = read(addr_abs);
-  C = fetched & 0x80 ? 1 : 0;
+  SetFlag(C, fetched & 0x80);
   u8 temp = (fetched << 1) & 0xFF;
   SetNZ(temp);
 
@@ -301,9 +328,10 @@ u8 CPU::BIT()
 {
   u8 fetched = read(addr_abs);
   u8 temp = a & fetched;
-  Z = temp == 0 ? 1 : 0;
-  N = temp & (1 << 7) ? 1 : 0;
-  V = temp & (1 << 6) ? 1 : 0;
+
+  SetFlag(Z, temp == 0);
+  SetFlag(N, fetched & (1 << 7));
+  SetFlag(V, fetched & (1 << 6));
   return 0;
 }
 
@@ -329,32 +357,43 @@ u8 CPU::branchBaseInstruction(bool takeBranch)
 }
 
 // Branch on 'plus' (positive)
-u8 CPU::BPL() { return branchBaseInstruction(N == 0); }
+u8 CPU::BPL() { return branchBaseInstruction(GetFlag(N) == 0); }
 
 // Branch on 'minus' (negative)
-u8 CPU::BMI() { return branchBaseInstruction(N == 1); }
+u8 CPU::BMI() { return branchBaseInstruction(GetFlag(N) == 1); }
 
 // Branch on overflow clear
-u8 CPU::BVC() { return branchBaseInstruction(V == 0); }
+u8 CPU::BVC() { return branchBaseInstruction(GetFlag(V) == 0); }
 
 // Branch on overflow set
-u8 CPU::BVS() { return branchBaseInstruction(V == 1); }
+u8 CPU::BVS() { return branchBaseInstruction(GetFlag(V) == 1); }
 
 // Branch on carry clear
-u8 CPU::BCC() { return branchBaseInstruction(C == 0); }
+u8 CPU::BCC() { return branchBaseInstruction(GetFlag(C) == 0); }
 
 // Branch on carry set
-u8 CPU::BCS() { return branchBaseInstruction(C == 1); }
+u8 CPU::BCS() { return branchBaseInstruction(GetFlag(C) == 1); }
 
 // Branch on not-equal
-u8 CPU::BNE() { return branchBaseInstruction(Z == 0); }
+u8 CPU::BNE() { return branchBaseInstruction(GetFlag(Z) == 0); }
 
 // Branch on equal
-u8 CPU::BEQ() { return branchBaseInstruction(Z == 1); }
+u8 CPU::BEQ() { return branchBaseInstruction(GetFlag(Z) == 1); }
 
 u8 CPU::BRK()
 {
-  assert(0 && "BRK unimplemented");
+  pc++;
+
+  SetFlag(I, 1);
+  push(pc >> 8);
+  push(pc & 0xFF);
+
+  SetFlag(B, 1);
+  push(p);
+  SetFlag(B, 0);
+
+  pc = read(0xFFFE) | (read(0xFFFF) << 8);
+  return 0;
 }
 
 u8 CPU::CMP()
@@ -362,34 +401,32 @@ u8 CPU::CMP()
   u8 arg = read(addr_abs);
   u8 result = a - arg;
   SetNZ(result);
-  C = a >= arg ? 1 : 0;
+  SetFlag(C, a >= arg);
   return 0;
 }
 
 u8 CPU::CPX()
 {
-  u8 temp = read(addr_abs);
-  u8 fetched_data = temp;
-  temp = x - temp;
-  SetNZ(temp);
-  C = x >= fetched_data ? 1 : 0;
+  u8 arg = read(addr_abs);
+  u8 result = x - arg;
+  SetNZ(result);
+  SetFlag(C, x >= arg);
   return 0;
 }
 
 u8 CPU::CPY()
 {
-  u8 temp = read(addr_abs);
-  u8 fetched_data = temp;
-  temp = y - temp;
-  SetNZ(temp);
-  C = y >= fetched_data ? 1 : 0;
+  u8 arg = read(addr_abs);
+  u8 result = y - arg;
+  SetNZ(result);
+  SetFlag(C, y >= arg);
   return 0;
 }
 
 u8 CPU::DEC()
 {
   u8 temp = read(addr_abs);
-  temp -= 1;
+  temp--;
   SetNZ(temp);
   write(addr_abs, temp);
   return 0;
@@ -404,37 +441,38 @@ u8 CPU::EOR()
 
 u8 CPU::CLC()
 {
-  C = 0;
+  SetFlag(C, 0);
   return 0;
 }
 u8 CPU::SEC()
 {
-  C = 1;
+  SetFlag(C, 1);
   return 0;
 }
 u8 CPU::CLI()
 {
-  I = 0;
+  SetFlag(I, 0);
   return 0;
 }
 u8 CPU::SEI()
 {
-  I = 1;
+  SetFlag(I, 1);
   return 0;
 }
 u8 CPU::CLV()
 {
-  V = 0;
+  SetFlag(V, 0);
   return 0;
 }
 u8 CPU::CLD()
 {
-  D = 0;
+  SetFlag(D, 0);
   return 0;
 }
+
 u8 CPU::SED()
 {
-  D = 1;
+  SetFlag(D, 1);
   return 0;
 }
 
@@ -456,6 +494,7 @@ u8 CPU::JMP()
 u8 CPU::JSR()
 {
   pc--;
+
   push(pc >> 8);
   push(pc & 0xFF);
 
@@ -492,7 +531,7 @@ u8 CPU::LSR()
   else
     val = read(addr_abs);
 
-  C = val & 1;
+  SetFlag(C, val & 1);
   val = val >> 1;
   SetNZ(val);
 
@@ -573,10 +612,10 @@ u8 CPU::ROL()
   else
     val = read(addr_abs);
 
-  u8 newC = val & 0x80;
-  val = (val << 1) | C;
+  u8 newC = (val & 0x80) ? 1 : 0;
+  val = (val << 1) | GetFlag(C);
   SetNZ(val);
-  C = newC;
+  SetFlag(C, newC);
 
   if (instructions[opcode].addressing == &CPU::addr_implied)
     a = val;
@@ -594,10 +633,10 @@ u8 CPU::ROR()
     val = read(addr_abs);
 
   u8 newC = val & 1;
-  val = (val >> 1) | (C << 7);
+  val = (val >> 1) | (GetFlag(C) << 7);
 
   SetNZ(val);
-  C = newC;
+  SetFlag(C, newC);
 
   if (instructions[opcode].addressing == &CPU::addr_implied)
     a = val;
@@ -609,11 +648,11 @@ u8 CPU::ROR()
 u8 CPU::RTI()
 {
   p = pop();
-  B = 0;
-  U = 0;
+  SetFlag(B, 0);
+  SetFlag(U, 0);
 
-  u16 high = pop() & 0xFF;
   u16 low = pop() & 0xFF;
+  u16 high = pop() & 0xFF;
   pc = low | (high << 8);
   return 0;
 }
@@ -630,15 +669,15 @@ u8 CPU::RTS()
 u8 CPU::SBC()
 {
   u8 arg = read(addr_abs) ^ 0xFF;
-  u16 result = arg + C + a;
+  u16 result = arg + GetFlag(C) + a;
 
   // If both inputs had the same sign but the result has a different sign, then set V.
   bool overflowCheck = (result ^ a) & (result ^ arg) & 0x0080; //(a & 0x80) == (arg & 0x80) && (a & 0x80) != (result & 0x80);
 
   a = result & 0xFF;
   SetNZ(a);
-  C = result > 0xFF ? 1 : 0;
-  V = overflowCheck ? 1 : 0;
+  SetFlag(C, result > 0xFF);
+  SetFlag(V, overflowCheck);
 
   return 0;
 }
@@ -654,6 +693,7 @@ u8 CPU::TXS()
   sp = x;
   return 0;
 }
+
 u8 CPU::TSX()
 {
   x = sp;
@@ -677,18 +717,18 @@ u8 CPU::PLA()
 
 u8 CPU::PHP()
 {
-  B = 1;
-  U = 1;
+  SetFlag(B, 1);
+  SetFlag(U, 1);
   push(p);
-  B = 0;
-  U = 0;
+  SetFlag(B, 0);
+  SetFlag(U, 0);
   return 0;
 }
 
 u8 CPU::PLP()
 {
   p = pop();
-  U = 1;
+  SetFlag(U, 1);
   return 0;
 }
 
@@ -733,17 +773,20 @@ u8 CPU::addr_zeropage_x()
   pc++;
   return 0;
 }
+
 u8 CPU::addr_zeropage_y()
 {
   addr_abs = (read(pc) + y) & 0x00FF;
   pc++;
   return 0;
 }
+
 u8 CPU::addr_absolute()
 {
   // low byte first, then high byte (6502 is little endian)
-  u8 low = read(pc++);
-  u8 high = read(pc++);
+  u8 low = read(pc);
+  u8 high = read(pc + 1);
+  pc += 2;
 
   addr_abs = (high << 8) | low;
   return 0;
@@ -791,8 +834,8 @@ u8 CPU::addr_absolute_y()
 
 u8 CPU::addr_indirect()
 {
-  u8 high = read(pc++);
   u8 low = read(pc++);
+  u8 high = read(pc++);
   u16 ptr = (high << 8) | low;
 
   if (low == 0x00FF) // Simulate page boundary hardware bug
@@ -824,8 +867,7 @@ u8 CPU::addr_indirect_y()
   u16 high = read((t + 1) & 0xFF);
 
   addr_abs = (high << 8) | low;
-  //addr_abs += y;
-  addr_abs = (addr_abs & 0xFF00) | ((low + y) & 0xFF);
+  addr_abs += y;
 
   return (addr_abs >> 8) != high ? 1 : 0;
 }
@@ -842,6 +884,7 @@ void CPU::write(u16 addr, u8 val)
 
 void CPU::Clock()
 {
+  // While OAM DMA is taking place, the CPU doesn't do anything else.
   if (oam_dma_cycles_remaining > 0)
   {
     oam_dma_cycles_remaining--;
@@ -855,10 +898,19 @@ void CPU::Clock()
     opcode = read(pc++);
 
     u8 operation_base_cycles = instructions[opcode].cycles;
-    u8 address_mode_cycles = (this->*instructions[opcode].addressing)();
-    u8 operation_extra_cycles = (this->*instructions[opcode].operation)();
 
-    instruction_remaining_cycles = operation_base_cycles + address_mode_cycles + operation_extra_cycles;
+    if (instructions[opcode].addressing != nullptr)
+    {
+      u8 address_mode_cycles = (this->*instructions[opcode].addressing)();
+      u8 operation_extra_cycles = (this->*instructions[opcode].operation)();
+
+      instruction_remaining_cycles = operation_base_cycles + address_mode_cycles + operation_extra_cycles;
+    }
+    else
+    {
+
+      instruction_remaining_cycles = 1;
+    }
   }
 
   instruction_remaining_cycles--;
@@ -874,15 +926,14 @@ void CPU::WTF()
 {
   for (int i = 0; i < WTF_LEN; ++i)
   {
-    printf("WTF[%d] -- %s", 1+i-WTF_LEN, WTF_BUFFER[(WTF_PTR + i) % WTF_LEN]);
-    
+    printf("WTF[%d] -- %s", 1 + i - WTF_LEN, WTF_BUFFER[(WTF_PTR + i) % WTF_LEN]);
   }
   exit(0);
 }
 
 int CPU::Step()
 {
-  Debug();
+  //Debug();
 
   int total_step_cycles = 0;
 
@@ -908,9 +959,14 @@ int CPU::Step()
 
 void CPU::TriggerNMI()
 {
-  push(pc & 0xFF);
   push((pc >> 8) & 0xFF);
+  push(pc & 0xFF);
+
+  SetFlag(B, 0);
+  SetFlag(U, 1);
+  SetFlag(I, 1);
   push(p);
+
   pc = read16(0xFFFA);
   printf("NMI @ 0x%04X\n", pc);
 }
@@ -1013,7 +1069,7 @@ void CPU::Debug()
   char *line_buffer_current = line_buffer;
 
   line_buffer_current += sprintf(line_buffer_current, "%-20s ", disassembly_string);
-  line_buffer_current += sprintf(line_buffer_current, ":: %010u :: AXYSP = %02X,%02X,%02X,%02X,%02X  --  ", total_clock_cycles, a, x, y, sp, p);
+  line_buffer_current += sprintf(line_buffer_current, ":: %010u ::  A:%02X X:%02X Y:%02X P:%02X SP:%02X  --  ", total_clock_cycles, a, x, y, p, sp);
 
   const int W = 3;
   for (int i = -W; i <= W; ++i)
@@ -1035,6 +1091,9 @@ void CPU::Debug()
     line_buffer_current += sprintf(line_buffer_current, "%02X ", read(i));
 
   line_buffer_current += sprintf(line_buffer_current, "\n");
+
+  if (in_step_mode)
+    printf("%s", line_buffer);
 
   memcpy(WTF_BUFFER[WTF_PTR], line_buffer, 1024);
   WTF_PTR = (WTF_PTR + 1) % WTF_LEN;

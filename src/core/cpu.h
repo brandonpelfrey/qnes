@@ -36,6 +36,21 @@ private:
   u16 pc;
   u8 sp;
 
+  enum Flags
+  {
+    C = 1 << 0,
+    Z = 1 << 1,
+    I = 1 << 2,
+    D = 1 << 3,
+    B = 1 << 4,
+    U = 1 << 5,
+    V = 1 << 6,
+    N = 1 << 7,
+  };
+
+  void SetFlag(Flags flag, u8 value);
+  u8 GetFlag(Flags flag);
+
   u16 oam_dma_cycles_remaining;
   u8 instruction_remaining_cycles;
   u32 total_clock_cycles = 0;
@@ -49,21 +64,6 @@ private:
   u8 opcode;
   u16 addr_rel, addr_abs;
   u8 fetched_data;
-
-  union {
-    u8 P;
-    struct
-    {
-      u8 C : 1;
-      u8 Z : 1;
-      u8 I : 1;
-      u8 D : 1;
-      u8 B : 1;
-      u8 U : 1;
-      u8 V : 1;
-      u8 N : 1;
-    };
-  };
 
   void SetNZ(u8 value);
 
@@ -159,14 +159,19 @@ private:
   void push(u8);
   u8 pop();
 
+  bool in_step_mode;
+
 public:
   CPU();
   int Step();
+  void Pause();
+  void Continue();
+  bool IsPaused() const { return in_step_mode; }
 
   void TriggerNMI();
   void Clock();
   void Reset();
-  void SoftReset();
+  void SoftReset(u16 pc);
   void Debug();
 
   void WTF();

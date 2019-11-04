@@ -15,6 +15,8 @@ int main(int argc, char **argv)
   std::shared_ptr<Console> console = std::make_shared<Console>();
   console->LoadROM(argv[1]);
   console->HardReset();
+  //console->GetCPU()->SoftReset(0xC000);
+
 
   Frontend *frontend = new SDL2GLFrontend();
   frontend->SetConsole(console);
