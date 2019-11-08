@@ -5,7 +5,6 @@
 void Controllers::StrobeJoyPad(u8 index)
 {
   controller_shift_registers[index] = controller_states[index];
-  printf("Strobe %02X\n", controller_shift_registers[index]);
 }
 
 u8 Controllers::ShiftJoyPadBit(u8 index)

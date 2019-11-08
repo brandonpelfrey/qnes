@@ -30,4 +30,6 @@ public:
   void TriggerNMI();
   u8 Read(u16 address, bool affects_state = true);
   void Write(u16 address, u8 val);
+
+  u8* GetRAMView() { return RAM; }
 };

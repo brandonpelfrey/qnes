@@ -6,7 +6,18 @@ import os, sys, subprocess
 env = Environment()
 env.Append(CPPFLAGS = ['-Wall'])
 env.Append(CXXFLAGS = ['-std=c++17', '-O0', '-g'])
+env.Append(CPPFLAGS = ['-I./vendor/glad/include'])
+env.Append(CPPFLAGS = ['-I./vendor/imgui'])
 env['ENV']['TERM'] = os.environ['TERM'] # Color terminal
+
+
+########################################
+
+third_party_env = env.Clone()
+third_party_env.VariantDir('build/vendor', 'vendor', duplicate=0)
+
+glad_lib = third_party_env.StaticLibrary(target='build/glad', source=Glob('build/vendor/glad/src/*.c') )
+imgui_lib = third_party_env.StaticLibrary(target='build/imgui', source=Glob('build/vendor/imgui/*.cpp') )
 
 ########################################
 # qnes
@@ -16,9 +27,6 @@ qnes.VariantDir('build', 'src', duplicate=0)
 qnes.Append(CPPFLAGS = ['-I./src'])
 
 if sys.platform == 'darwin':
-  qnes.Append(LIBPATH=['/usr/local/lib'])
-  #qnes.Append(LIBS=['SDL2'])
-  qnes.Append(CPPFLAGS=['-I/usr/local/include/'])
   qnes.ParseConfig('sdl2-config --cflags --libs')
   qnes.Append(FRAMEWORKS=' OpenGL')
 else:
@@ -34,4 +42,7 @@ for root, dirs, files in os.walk("src"):
       build_path = src_path.replace('src/', 'build/', 1)
       qnes_src.append( build_path )
 
-qnes.Program('build/qnes', source=[qnes_src])
+qnes_lib = qnes.StaticLibrary(target='build/libqnes', source=[qnes_src])
+
+qnes.VariantDir('build/app', 'app', duplicate=0)
+qnes.Program('build/qnes', source=['build/app/qnes.cpp', qnes_lib, imgui_lib, Glob('vendor/glad/src/*.c')] )

@@ -38,4 +38,5 @@ public:
   Texture& GetFrameBuffer() { return ppu->GetFrameBufferTexture(); }
   std::shared_ptr<PPU> GetPPU() { return ppu; }
   std::shared_ptr<Controllers> GetControllers() { return controllers; }
+  std::shared_ptr<Bus> GetBus() { return bus; }
 };

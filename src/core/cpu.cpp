@@ -3,7 +3,7 @@
 
 #include "core/cpu.h"
 #include "core/bus.h"
-#include "core/cpu_state.h"
+#include "core/state.h"
 
 // https://www.masswerk.at/6502/6502_instruction_set.html
 // http://www.6502.org/tutorials/6502opcodes.html#BRK
@@ -749,7 +749,6 @@ u8 CPU::STY()
 
 u8 CPU::addr_implied()
 {
-  // ???
   return 0;
 }
 
@@ -872,12 +871,18 @@ u8 CPU::addr_indirect_y()
   return (addr_abs >> 8) != high ? 1 : 0;
 }
 
-u8 CPU::read(u16 addr)
+u8 CPU::read(u16 addr, u8 rw_flags)
 {
-  return bus->Read(addr);
+  if (rw_flags & RWFLAGS_NO_BREAKPOINTS)
+    return bus->Read(addr);
+  else
+  {
+    m_stepmode = true;
+    return bus->Read(addr);
+  }
 }
 
-void CPU::write(u16 addr, u8 val)
+void CPU::write(u16 addr, u8 val, u8 rw_flags)
 {
   bus->Write(addr, val);
 }
@@ -1097,4 +1102,109 @@ void CPU::Debug()
 
   memcpy(WTF_BUFFER[WTF_PTR], line_buffer, 1024);
   WTF_PTR = (WTF_PTR + 1) % WTF_LEN;
+}
+
+void CPU::Disassemble(u16 addr_start, int count, DisassemblyEntry *disassembly_entries)
+{
+  // TODO : Find actual good start address which aligns with actual instructions
+
+  // Produce disassembly entries
+  u16 addr = addr_start;
+  for (int entry_i = 0; entry_i < count; entry_i++)
+  {
+    DisassemblyEntry *dentry = &disassembly_entries[entry_i];
+
+    u8 opcode = read(addr);
+    u8 addr1 = read(addr + 1);
+    u8 addr2 = read(addr + 2);
+
+    dentry->instruction_bytes[0] = opcode;
+    dentry->instruction_bytes[1] = addr1;
+    dentry->instruction_bytes[2] = addr2;
+
+    dentry->pc = addr;
+
+    auto opcode_data = instructions[opcode];
+    if (opcode_data.addressing == &CPU::addr_implied)
+    {
+      dentry->num_instruction_bytes = 1;
+      sprintf(dentry->buffer, "%s", opcode_data.name.c_str());
+    }
+    else if (opcode_data.addressing == &CPU::addr_immediate)
+    {
+      dentry->num_instruction_bytes = 2;
+      sprintf(dentry->buffer, "%s #$%02X", opcode_data.name.c_str(), addr1);
+    }
+    else if (opcode_data.addressing == &CPU::addr_absolute)
+    {
+      dentry->num_instruction_bytes = 3;
+      sprintf(dentry->buffer, "%s $%02X%02X", opcode_data.name.c_str(), addr2, addr1);
+    }
+    else if (opcode_data.addressing == &CPU::addr_absolute_x)
+    {
+      dentry->num_instruction_bytes = 3;
+      sprintf(dentry->buffer, "%s $%02X%02X,X", opcode_data.name.c_str(), addr2, addr1);
+    }
+    else if (opcode_data.addressing == &CPU::addr_absolute_y)
+    {
+      dentry->num_instruction_bytes = 3;
+      sprintf(dentry->buffer, "%s $%02X%02X,Y", opcode_data.name.c_str(), addr2, addr1);
+    }
+    else if (opcode_data.addressing == &CPU::addr_zeropage)
+    {
+      dentry->num_instruction_bytes = 2;
+      sprintf(dentry->buffer, "%s $%02X", opcode_data.name.c_str(), addr1);
+    }
+    else if (opcode_data.addressing == &CPU::addr_zeropage_x)
+    {
+      dentry->num_instruction_bytes = 2;
+      sprintf(dentry->buffer, "%s $%02X,X", opcode_data.name.c_str(), addr1);
+    }
+    else if (opcode_data.addressing == &CPU::addr_zeropage_y)
+    {
+      dentry->num_instruction_bytes = 2;
+      sprintf(dentry->buffer, "%s $%02X,Y", opcode_data.name.c_str(), addr1);
+    }
+    else if (opcode_data.addressing == &CPU::addr_indirect)
+    {
+      dentry->num_instruction_bytes = 3;
+      sprintf(dentry->buffer, "%s ($%02X%02X)", opcode_data.name.c_str(), addr2, addr1);
+      // TODO : show indirect pointer
+    }
+    else if (opcode_data.addressing == &CPU::addr_indirect_x)
+    {
+      dentry->num_instruction_bytes = 2;
+      sprintf(dentry->buffer, "%s ($%02X,X)", opcode_data.name.c_str(), addr1);
+      // TODO : show indirect pointer
+    }
+    else if (opcode_data.addressing == &CPU::addr_indirect_y)
+    {
+      dentry->num_instruction_bytes = 2;
+      sprintf(dentry->buffer, "%s ($%02X),Y", opcode_data.name.c_str(), addr1);
+      // TODO : show indirect pointer
+    }
+    else if (opcode_data.addressing == &CPU::addr_relative)
+    {
+      dentry->num_instruction_bytes = 2;
+      u16 branch_address = pc + 2 + sign_extend_16(addr1);
+      sprintf(dentry->buffer, "%s $%04X", opcode_data.name.c_str(), branch_address);
+    }
+    else
+    {
+      dentry->num_instruction_bytes = 1;
+      sprintf(dentry->buffer, "??? opcode 0x%02X", opcode);
+    }
+
+    addr += dentry->num_instruction_bytes;
+  }
+}
+
+void CPU::GetState(State *state)
+{
+  state->a = a;
+  state->x = x;
+  state->y = y;
+  state->p = p;
+  state->s = sp;
+  state->pc = pc;
 }

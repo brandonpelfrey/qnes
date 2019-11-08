@@ -3,6 +3,7 @@
 #include <thread>
 #include "frontend/Frontend.h"
 #include "core/types.h"
+#include "./imgui_context.h"
 
 struct SDL_Window;
 class SDL2GLFrontend : public Frontend
@@ -12,9 +13,11 @@ private:
   bool should_close;
   u32 framebuffer_texture;
 
+private:
+  void imgui();
+
 public:
   SDL2GLFrontend() noexcept;
-  ~SDL2GLFrontend();
 
   void MainLoop();
   void AwaitExit();

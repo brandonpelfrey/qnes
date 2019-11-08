@@ -4,7 +4,9 @@
 #include <string>
 #include <vector>
 
+#include "./cpu_debug.h"
 #include "./types.h"
+#include "./state.h"
 
 class Bus;
 
@@ -22,8 +24,12 @@ private:
   std::vector<InstructionEntry> instructions;
 
 private:
-  u8 read(u16 addr);
-  void write(u16 addr, u8 val);
+  bool m_stepmode = false;
+
+  const u8 RWFLAGS_NO_BREAKPOINTS = 1 << 0;
+
+  u8 read(u16 addr, u8 rw_flags = 0);
+  void write(u16 addr, u8 val, u8 rw_flags = 0);
   std::shared_ptr<Bus> bus;
 
 public:
@@ -173,6 +179,27 @@ public:
   void Reset();
   void SoftReset(u16 pc);
   void Debug();
-
   void WTF();
+
+  void SetPC(u16 addr) { pc = addr; }
+
+public:
+  void GetState(State *);
+
+  struct DisassemblyEntry
+  {
+    u16 pc;
+    u8 instruction_bytes[3];
+    u8 num_instruction_bytes;
+
+    char *buffer;
+    int buffer_len;
+  };
+  void Disassemble(u16 addr_start, int count, DisassemblyEntry *entries);
+
+private:
+  CPUDebugging debug_state;
+
+public:
+  CPUDebugging &DebuggingControls() { return debug_state; }
 };

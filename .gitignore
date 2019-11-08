@@ -2,6 +2,8 @@
 .vscode
 build
 roms
+imgui.ini
+.DS_Store
 
 # Prerequisites
 *.d

@@ -25,6 +25,8 @@ PPU::PPU()
 
   address_latch = 0;
   vram = new u8[0x4000];
+  memset(vram, 0, 0x4000);
+
   frame_buffer.Resize(WIDTH, HEIGHT);
   pattern_left.Resize(128, 128);
   pattern_right.Resize(128, 128);
@@ -52,21 +54,20 @@ u8 PPU::Read(u16 addr)
   }
   else if (addr == 0x2007)
   {
+    assert(0);
 
     // Read @ vram_addr pointer
     if ((vram_addr & 0xFF00) != 0x3F00) //
     {
       u8 return_value = PPU_DATA_read_buffer;
       PPU_DATA_read_buffer = vram[vram_addr & 0x3FFF];
-      u8 addr_increment = VRAMAddressIncrement ? 32 : 1;
+      u8 addr_increment = (PPUCTRL & 0b100) ? 32 : 1;
       vram_addr = (vram_addr + addr_increment) & 0x3FFF;
       return return_value;
     }
     else
     {
     }
-
-    //assert(0);
   }
   else
   {
@@ -126,7 +127,7 @@ void PPU::Write(u16 addr, u8 val)
     {
       vram_addr = vram_addr | val;
       address_latch = 0;
-      //printf("ADDR = 0x%04X\n", vram_addr);
+      printf("ADDR = 0x%04X\n", vram_addr);
     }
   }
   else if (addr == 0x2007) // PPUDATA
@@ -136,7 +137,7 @@ void PPU::Write(u16 addr, u8 val)
 
     vram[vram_addr & 0x3FFF] = val;
     printf("PPU Data Write 0x%02X -> 0x%04X\n", val, vram_addr & 0x3FFF);
-    u8 addr_increment = VRAMAddressIncrement ? 32 : 1;
+    u8 addr_increment = (PPUCTRL & 0b100) ? 32 : 1;
     vram_addr = (vram_addr + addr_increment) & 0x3FFF;
   }
   else if (addr == 0x4014)
@@ -148,7 +149,6 @@ void PPU::Write(u16 addr, u8 val)
     for (int i = 0; i < 256; ++i)
     {
       OAM_RAM[i & 0xFF] = bus->Read(page | ((OAMADDR)&0xFF));
-      //vram[i & 0xFF] = OAM_RAM[i & 0xFF];
       OAMADDR++;
     }
 
