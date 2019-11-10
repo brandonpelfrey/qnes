@@ -4,12 +4,13 @@ import os, sys, subprocess
 # Root compilation settings, shared among all builds
 
 env = Environment()
+env.Replace(CXX='g++-9')
 env.Append(CPPFLAGS = ['-Wall'])
 env.Append(CXXFLAGS = ['-std=c++17', '-O0', '-g'])
 env.Append(CPPFLAGS = ['-I./vendor/glad/include'])
 env.Append(CPPFLAGS = ['-I./vendor/imgui'])
+env.ParseConfig('sdl2-config --cflags --libs')
 env['ENV']['TERM'] = os.environ['TERM'] # Color terminal
-
 
 ########################################
 
@@ -27,7 +28,7 @@ qnes.VariantDir('build', 'src', duplicate=0)
 qnes.Append(CPPFLAGS = ['-I./src'])
 
 if sys.platform == 'darwin':
-  qnes.ParseConfig('sdl2-config --cflags --libs')
+  
   qnes.Append(FRAMEWORKS=' OpenGL')
 else:
   print('%s is not a supported platform. Please modify the SConstruct file' % (sys.platform))

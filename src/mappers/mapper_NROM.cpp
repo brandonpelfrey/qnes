@@ -11,8 +11,7 @@ bool Mapper_NROM::CPURead(u16 addr, u8 &val)
   if (addr >= 0x8000)
   {
     u16 base_address = 0x8000;
-    //if (description.CHR_ROM_8KB_Multiple == 1 && addr >= 0xC000)
-    if(addr >= 0xC000)
+    if (description.PRG_ROM_16KB_Multiple == 1 && addr >= 0xC000)
       base_address = 0xC000;
 
     u16 offset = addr - base_address;
@@ -35,7 +34,7 @@ bool Mapper_NROM::PPURead(u16 addr, u8 &val)
 {
   if (addr <= 0x2000)
   {
-    val = CHR_ROM[addr];
+    val = CHR_ROM[addr % (description.CHR_ROM_8KB_Multiple * 0x2000)];
     return true;
   }
 

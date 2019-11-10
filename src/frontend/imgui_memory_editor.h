@@ -47,6 +47,7 @@
 #pragma once
 #include <cstdio>      // sprintf, scanf
 #include <cstdint>     // uint8_t, etc.
+#include <functional>
 #include <imgui.h>
 
 #ifdef _MSC_VER
@@ -100,6 +101,7 @@ struct MemoryEditor
     u8              (*ReadFn)(const u8* data, size_t off);  // = NULL   // optional handler to read bytes.
     void            (*WriteFn)(u8* data, size_t off, u8 d); // = NULL   // optional handler to write bytes.
     bool            (*HighlightFn)(const u8* data, size_t off);//NULL   // optional handler to return Highlight property (to support non-contiguous highlighting).
+    std::function<u16(u16)> GetLastPCForWrite;
 
     // [Internal State]
     bool            ContentsWidthChanged;
@@ -131,6 +133,7 @@ struct MemoryEditor
         ReadFn = NULL;
         WriteFn = NULL;
         HighlightFn = NULL;
+        GetLastPCForWrite = nullptr;
 
         // State/Internals
         ContentsWidthChanged = false;
@@ -391,6 +394,17 @@ struct MemoryEditor
                             ImGui::TextDisabled("00 ");
                         else
                             ImGui::Text(format_byte_space, b);
+
+                        ////////////////////
+                        char buff[8];
+                        if(GetLastPCForWrite)
+                            sprintf(buff, "%04X", GetLastPCForWrite(addr));
+                        else
+                            sprintf(buff, "????");
+
+                        if (ImGui::IsItemHovered())
+                            ImGui::SetTooltip(buff);
+                            
                     }
                     if (!ReadOnly && ImGui::IsItemHovered() && ImGui::IsMouseClicked(0))
                     {

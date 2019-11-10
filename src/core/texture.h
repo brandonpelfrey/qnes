@@ -1,4 +1,5 @@
 #pragma once
+#include <cstring>
 #include <csignal>
 #include "core/types.h"
 

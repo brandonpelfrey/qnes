@@ -15,9 +15,13 @@ private:
   std::shared_ptr<Cartridge> cartridge;
   std::shared_ptr<Controllers> controllers;
 
-  u8 RAM[0x0800];
+  u8 *RAM;
+  u16 *RAMWriteLastPC;
 
 public:
+  Bus();
+  ~Bus();
+
   void SetCPU(std::shared_ptr<CPU> cpu) { this->cpu = cpu; }
   void SetPPU(std::shared_ptr<PPU> ppu) { this->ppu = ppu; }
   void SetCartridge(std::shared_ptr<Cartridge> cartridge) { this->cartridge = cartridge; }
@@ -31,5 +35,15 @@ public:
   u8 Read(u16 address, bool affects_state = true);
   void Write(u16 address, u8 val);
 
-  u8* GetRAMView() { return RAM; }
+  u8 *GetRAMView() { return RAM; }
+
+  void SetLastRAMWritePC(u16 ram_addr, u16 pc)
+  {
+    RAMWriteLastPC[ram_addr] = pc;
+  }
+
+  u16 GetLastRAMWritePC(u16 ram_addr)
+  {
+    return RAMWriteLastPC[ram_addr];
+  }
 };

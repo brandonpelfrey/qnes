@@ -4,31 +4,53 @@
 #include <vector>
 #include "core/types.h"
 
+#include <unordered_map>
+#include <optional>
+
+struct Breakpoint
+{
+  u16 addr;
+  u8 mask;
+
+  static const u8 READ = 1;
+  static const u8 WRITE = 2;
+  static const u8 EXECUTE = 4;
+
+  Breakpoint() {}
+  Breakpoint(u16 addr) : addr(addr), mask(EXECUTE) {}
+  Breakpoint(u16 addr, u8 flags) : addr(addr), mask(flags) {}
+};
+
 class CPUDebugging
 {
 private:
-  std::vector<u16> execute_breakpoints;
-  std::vector<u16> write_breakpoints;
-  std::vector<u16> read_breakpoints;
-
-  std::vector<u16>::iterator get_execution_breakpoint(u16 addr)
-  {
-    return std::find(execute_breakpoints.begin(), execute_breakpoints.end(), addr);
-  }
+  using BreakpointMap = std::unordered_map<u16, Breakpoint>;
+  BreakpointMap breakpoints;
 
 public:
-  void AddExecutionBreakpoint(u16 addr)
+  void Add(Breakpoint bp)
   {
-    if (get_execution_breakpoint(addr) == execute_breakpoints.end())
-      execute_breakpoints.push_back(addr);
+    breakpoints[bp.addr] = bp;
   }
-  bool HasExecutionBreakpoint(u16 addr)
+
+  void Remove(u16 addr)
   {
-    return get_execution_breakpoint(addr) != execute_breakpoints.end();
+    breakpoints.erase(addr);
   }
-  void RemoveExecutionBreakpoint(u16 addr)
+
+  void Remove(Breakpoint bp)
   {
-    if (auto it = get_execution_breakpoint(addr); it != execute_breakpoints.end())
-      execute_breakpoints.erase(it);
+    Remove(bp.addr);
+  }
+
+  const BreakpointMap &GetAll()
+  {
+    return breakpoints;
+  }
+
+  bool Has(u16 addr, u8 flag_filter = Breakpoint::EXECUTE)
+  {
+    auto it = breakpoints.find(addr);
+    return (it != breakpoints.end()) && (it->second.mask & flag_filter);
   }
 };

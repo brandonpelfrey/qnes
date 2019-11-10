@@ -44,22 +44,13 @@ int Console::StepCPU()
 
 void Console::StepFrame()
 {
-  int starting_frame_count = frame_count;
+  bool should_continue = true;
+  ppu->SetEndFrameCallBack([&]() { should_continue = false; frame_count++; });
 
-  ppu->SetEndFrameCallBack([&]() {
-    frame_count++;
-  });
-
-  while (frame_count == starting_frame_count)
+  while (should_continue)
   {
     cpu_clock_count += StepCPU();
     if (cpu->IsPaused())
       break;
   }
-}
-
-void Console::Test2()
-{
-  printf("Reset Vector (0xFFFC) : 0x%02X%02X\n", bus->Read(0xFFFD), bus->Read(0xFFFC));
-  cpu->Reset();
 }

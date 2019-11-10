@@ -17,6 +17,10 @@
 CPU::CPU()
 {
   instructions.resize(256);
+  for (int i = 0; i < 256; ++i)
+  {
+    instructions[i] = {"???", &CPU::NOP, &CPU::addr_implied, 2};
+  }
 
   // ADC
   instructions[0x69] = {"ADC", &CPU::ADC, &CPU::addr_immediate, 2};
@@ -236,6 +240,11 @@ CPU::CPU()
   in_step_mode = false;
 }
 
+CPU::~CPU()
+{
+  printf("CPU Destroyed!\n");
+}
+
 void CPU::Pause()
 {
   in_step_mode = true;
@@ -312,9 +321,14 @@ u8 CPU::AND()
 
 u8 CPU::ASL()
 {
-  u8 fetched = read(addr_abs);
-  SetFlag(C, fetched & 0x80);
-  u8 temp = (fetched << 1) & 0xFF;
+  u8 temp;
+  if (instructions[opcode].addressing == &CPU::addr_implied)
+    temp = a;
+  else
+    temp = read(addr_abs);
+
+  SetFlag(C, temp & 0x80);
+  temp <<= 1;
   SetNZ(temp);
 
   if (instructions[opcode].addressing == &CPU::addr_implied)
@@ -884,6 +898,7 @@ u8 CPU::read(u16 addr, u8 rw_flags)
 
 void CPU::write(u16 addr, u8 val, u8 rw_flags)
 {
+  bus->SetLastRAMWritePC(addr, opcode_pc);
   bus->Write(addr, val);
 }
 
@@ -900,20 +915,22 @@ void CPU::Clock()
   if (instruction_remaining_cycles == 0)
   {
     // Read the next instruction
+    opcode_pc = pc;
     opcode = read(pc++);
 
     u8 operation_base_cycles = instructions[opcode].cycles;
 
-    if (instructions[opcode].addressing != nullptr)
+    auto addressing_func = instructions[opcode].addressing;
+    auto operation_func = instructions[opcode].operation;
+    if (addressing_func && operation_func)
     {
-      u8 address_mode_cycles = (this->*instructions[opcode].addressing)();
-      u8 operation_extra_cycles = (this->*instructions[opcode].operation)();
+      u8 address_mode_cycles = std::invoke(addressing_func, this);
+      u8 operation_extra_cycles = std::invoke(operation_func, this);
 
       instruction_remaining_cycles = operation_base_cycles + address_mode_cycles + operation_extra_cycles;
     }
     else
     {
-
       instruction_remaining_cycles = 1;
     }
   }
@@ -922,23 +939,16 @@ void CPU::Clock()
   total_clock_cycles++;
 }
 
-bool WTF_MODE = true;
-const int WTF_LEN = 128;
-int WTF_PTR = 0;
-char WTF_BUFFER[1024][WTF_LEN];
-
-void CPU::WTF()
-{
-  for (int i = 0; i < WTF_LEN; ++i)
-  {
-    printf("WTF[%d] -- %s", 1 + i - WTF_LEN, WTF_BUFFER[(WTF_PTR + i) % WTF_LEN]);
-  }
-  exit(0);
-}
-
 int CPU::Step()
 {
-  //Debug();
+  // CPU owns whether or not to actual take a step. And the PPU advances based on what the CPU does.
+  // Check and see if we're about to execute on a breakpoint. If so and we're not in step mode already, drop into step mode.
+  const bool should_break = debug_state.Has(pc, Breakpoint::EXECUTE);
+  if (!in_step_mode && should_break)
+  {
+    in_step_mode = true;
+    return 0;
+  }
 
   int total_step_cycles = 0;
 
@@ -967,13 +977,16 @@ void CPU::TriggerNMI()
   push((pc >> 8) & 0xFF);
   push(pc & 0xFF);
 
+  u8 old_p = p;
   SetFlag(B, 0);
   SetFlag(U, 1);
-  SetFlag(I, 1);
   push(p);
 
+  p = old_p;
+  SetFlag(I, 1);
+
   pc = read16(0xFFFA);
-  printf("NMI @ 0x%04X\n", pc);
+  //printf("NMI @ 0x%04X\n", pc);
 }
 
 u16 CPU::read16(u16 addr)
@@ -985,14 +998,14 @@ u16 CPU::read16(u16 addr)
 
 void CPU::push(u8 val)
 {
-  bus->Write(0x100 | sp, val);
+  write(0x100 | sp, val);
   sp--;
 }
 
 u8 CPU::pop()
 {
   sp++;
-  return bus->Read(0x100 | sp);
+  return read(0x100 | sp);
 }
 
 void CPU::InitiateOAMDMACounter()
@@ -1000,113 +1013,11 @@ void CPU::InitiateOAMDMACounter()
   oam_dma_cycles_remaining = 513;
 }
 
-void CPU::Debug()
-{
-  char disassembly_string[256];
-  char *disassembly = disassembly_string;
-
-  disassembly += sprintf(disassembly, "0x%04X ", pc);
-
-  u8 opcode = read(pc);
-  auto entry = instructions[opcode];
-
-  u8 pc1 = read(pc + 1);
-  u8 pc2 = read(pc + 2);
-  u16 branch_address = pc + 2 + sign_extend_16(pc1);
-
-  if (entry.addressing == &CPU::addr_implied)
-  {
-    disassembly += sprintf(disassembly, "%s", entry.name.c_str());
-  }
-  else if (entry.addressing == &CPU::addr_immediate)
-  {
-    disassembly += sprintf(disassembly, "%s #$%02X", entry.name.c_str(), pc1);
-  }
-  else if (entry.addressing == &CPU::addr_absolute)
-  {
-    disassembly += sprintf(disassembly, "%s $%02X%02X", entry.name.c_str(), pc2, pc1);
-  }
-  else if (entry.addressing == &CPU::addr_absolute_x)
-  {
-    disassembly += sprintf(disassembly, "%s $%02X%02X,X", entry.name.c_str(), pc2, pc1);
-  }
-  else if (entry.addressing == &CPU::addr_absolute_y)
-  {
-    disassembly += sprintf(disassembly, "%s $%02X%02X,Y", entry.name.c_str(), pc2, pc1);
-  }
-  else if (entry.addressing == &CPU::addr_zeropage)
-  {
-    disassembly += sprintf(disassembly, "%s $%02X", entry.name.c_str(), pc1);
-  }
-  else if (entry.addressing == &CPU::addr_zeropage_x)
-  {
-    disassembly += sprintf(disassembly, "%s $%02X,X", entry.name.c_str(), pc1);
-  }
-  else if (entry.addressing == &CPU::addr_zeropage_y)
-  {
-    disassembly += sprintf(disassembly, "%s $%02X,Y", entry.name.c_str(), pc1);
-  }
-  else if (entry.addressing == &CPU::addr_indirect)
-  {
-    disassembly += sprintf(disassembly, "%s ($%02X%02X)", entry.name.c_str(), pc2, pc1);
-    // TODO : show indirect pointer
-  }
-  else if (entry.addressing == &CPU::addr_indirect_x)
-  {
-    disassembly += sprintf(disassembly, "%s ($%02X,X)", entry.name.c_str(), pc1);
-    // TODO : show indirect pointer
-  }
-  else if (entry.addressing == &CPU::addr_indirect_y)
-  {
-    disassembly += sprintf(disassembly, "%s ($%02X),Y", entry.name.c_str(), pc1);
-    // TODO : show indirect pointer
-  }
-  else if (entry.addressing == &CPU::addr_relative)
-  {
-    disassembly += sprintf(disassembly, "%s $%04X", entry.name.c_str(), branch_address);
-  }
-  else
-  {
-    disassembly += sprintf(disassembly, "??? opcode 0x%02X", opcode);
-  }
-
-  static char line_buffer[1024];
-  char *line_buffer_current = line_buffer;
-
-  line_buffer_current += sprintf(line_buffer_current, "%-20s ", disassembly_string);
-  line_buffer_current += sprintf(line_buffer_current, ":: %010u ::  A:%02X X:%02X Y:%02X P:%02X SP:%02X  --  ", total_clock_cycles, a, x, y, p, sp);
-
-  const int W = 3;
-  for (int i = -W; i <= W; ++i)
-  {
-    u16 q = 0x100 | ((sp + i) & 0xFF);
-
-    if (i == 0)
-    {
-      line_buffer_current += sprintf(line_buffer_current, "[%02X] ", read(q));
-    }
-    else
-    {
-      line_buffer_current += sprintf(line_buffer_current, "%02X ", read(q));
-    }
-  }
-
-  line_buffer_current += sprintf(line_buffer_current, " -- ZP ");
-  for (int i = 0; i < 6; ++i)
-    line_buffer_current += sprintf(line_buffer_current, "%02X ", read(i));
-
-  line_buffer_current += sprintf(line_buffer_current, "\n");
-
-  if (in_step_mode)
-    printf("%s", line_buffer);
-
-  memcpy(WTF_BUFFER[WTF_PTR], line_buffer, 1024);
-  WTF_PTR = (WTF_PTR + 1) % WTF_LEN;
-}
-
 void CPU::Disassemble(u16 addr_start, int count, DisassemblyEntry *disassembly_entries)
 {
   // TODO : Find actual good start address which aligns with actual instructions
+
+  u16 save_pc = pc;
 
   // Produce disassembly entries
   u16 addr = addr_start;
@@ -1121,13 +1032,19 @@ void CPU::Disassemble(u16 addr_start, int count, DisassemblyEntry *disassembly_e
     dentry->instruction_bytes[0] = opcode;
     dentry->instruction_bytes[1] = addr1;
     dentry->instruction_bytes[2] = addr2;
-
     dentry->pc = addr;
 
-    auto opcode_data = instructions[opcode];
+    const InstructionEntry &opcode_data(instructions[opcode]);
+
+    // Calculate the actual address of the operand. This will actually modify the CPU PC.
+    pc = addr + 1;
+    std::invoke(instructions[opcode].addressing, this);
+    dentry->computed_operand = addr_abs;
+
     if (opcode_data.addressing == &CPU::addr_implied)
     {
       dentry->num_instruction_bytes = 1;
+      dentry->computed_operand = 0xFFFF;
       sprintf(dentry->buffer, "%s", opcode_data.name.c_str());
     }
     else if (opcode_data.addressing == &CPU::addr_immediate)
@@ -1186,17 +1103,21 @@ void CPU::Disassemble(u16 addr_start, int count, DisassemblyEntry *disassembly_e
     else if (opcode_data.addressing == &CPU::addr_relative)
     {
       dentry->num_instruction_bytes = 2;
-      u16 branch_address = pc + 2 + sign_extend_16(addr1);
+      u16 branch_address = addr + addr_rel + 2;
       sprintf(dentry->buffer, "%s $%04X", opcode_data.name.c_str(), branch_address);
+      dentry->computed_operand = branch_address;
     }
     else
     {
       dentry->num_instruction_bytes = 1;
       sprintf(dentry->buffer, "??? opcode 0x%02X", opcode);
+      dentry->computed_operand = 0xFFFF;
     }
 
     addr += dentry->num_instruction_bytes;
   }
+
+  pc = save_pc;
 }
 
 void CPU::GetState(State *state)

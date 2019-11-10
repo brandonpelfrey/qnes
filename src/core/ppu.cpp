@@ -1,6 +1,8 @@
 #include "./ppu.h"
 #include "core/bus.h"
 #include "core/cartridge.h"
+#include <cassert>
+#include <cstring>
 
 // Palettes
 // https://wiki.nesdev.com/w/index.php/PPU_palettes
@@ -45,29 +47,24 @@ u8 PPU::Read(u16 addr)
   }
   else if (addr == 0x2002)
   {
-    u8 result = PPUSTATUS;
+    u8 result = (PPUSTATUS & 0xE0) | (PPU_DATA_read_buffer & 0x1F);
 
     VerticalBlank = 0; // Clear Vertical blank on PPUStatus read.
     address_latch = 0;
-
-    return (result & 0xe0) | (PPU_DATA_read_buffer & 0x1F);
+    return result;
   }
   else if (addr == 0x2007)
   {
-    assert(0);
-
     // Read @ vram_addr pointer
-    if ((vram_addr & 0xFF00) != 0x3F00) //
-    {
-      u8 return_value = PPU_DATA_read_buffer;
-      PPU_DATA_read_buffer = vram[vram_addr & 0x3FFF];
-      u8 addr_increment = (PPUCTRL & 0b100) ? 32 : 1;
-      vram_addr = (vram_addr + addr_increment) & 0x3FFF;
-      return return_value;
-    }
-    else
-    {
-    }
+
+    u8 return_value = PPU_DATA_read_buffer;
+    PPU_DATA_read_buffer = ppuRead(vram_addr & 0x3FFF);
+    if (vram_addr >= 0x3F00)
+      return_value = PPU_DATA_read_buffer;
+
+    u8 addr_increment = (PPUCTRL & 0b100) ? 32 : 1;
+    vram_addr = (vram_addr + addr_increment) & 0x3FFF;
+    return return_value;
   }
   else
   {
@@ -77,10 +74,9 @@ u8 PPU::Read(u16 addr)
   }
 }
 
-static int counter = 0;
 void PPU::Write(u16 addr, u8 val)
 {
-  printf("PPU WRITE() 0x%04X <- 0x%02X\n", addr, val);
+  //printf("PPU WRITE() 0x%04X <- 0x%02X\n", addr, val);
 
   if (addr == 0x2000)
   {
@@ -127,7 +123,6 @@ void PPU::Write(u16 addr, u8 val)
     {
       vram_addr = vram_addr | val;
       address_latch = 0;
-      printf("ADDR = 0x%04X\n", vram_addr);
     }
   }
   else if (addr == 0x2007) // PPUDATA
@@ -135,8 +130,16 @@ void PPU::Write(u16 addr, u8 val)
     // Write the value currently pointed at by the internal address latch,
     // then increment based on bit 2 of PPUCTRL
 
-    vram[vram_addr & 0x3FFF] = val;
-    printf("PPU Data Write 0x%02X -> 0x%04X\n", val, vram_addr & 0x3FFF);
+    vram_addr &= 0x3FFF;
+
+    /*
+    if (vram_addr == 0x3F10) vram_addr = 0x3F00;
+    if (vram_addr == 0x3F14) vram_addr = 0x3F04;
+    if (vram_addr == 0x3F18) vram_addr = 0x3F08;
+    if (vram_addr == 0x3F1C) vram_addr = 0x3F0C;
+    */
+
+    vram[NametableMirroring(vram_addr)] = val;
     u8 addr_increment = (PPUCTRL & 0b100) ? 32 : 1;
     vram_addr = (vram_addr + addr_increment) & 0x3FFF;
   }
@@ -174,7 +177,7 @@ void PPU::Clock()
   if (pixel_y == FIRST_VERTICAL_BLANK_LINE && pixel_x == 1)
   {
     VerticalBlank = 1;
-    printf("scanline %u -- PPUSTATUS = 0x%02X, PPUCTRL = 0x%02X\n", pixel_y, PPUSTATUS, PPUCTRL);
+    //printf("scanline %u -- PPUSTATUS = 0x%02X, PPUCTRL = 0x%02X\n", pixel_y, PPUSTATUS, PPUCTRL);
   }
 
   // This is separated from when we enter Vertical Blank, because if a user does not
@@ -189,6 +192,7 @@ void PPU::Clock()
   if (pixel_y == PRE_RENDER_SCANLINE && pixel_x == 1)
   {
     VerticalBlank = 0;
+    SpriteZeroHit = 0;
     nmi_latch = 0; // Reset NMI latch
   }
 
@@ -201,6 +205,11 @@ void PPU::Clock()
     pixel_x = 0;
     pixel_y++;
 
+    if (pixel_y == 33)
+    {
+      printf("scanline %d -- S0 :: %02X %02X %02X %02X --- SX/SY :: %d %d\n", pixel_y, OAM_RAM[0], OAM_RAM[1], OAM_RAM[2], OAM_RAM[3], scroll_x, scroll_y);
+    }
+
     if (pixel_y == PRE_RENDER_SCANLINE)
     {
       render_pattern_tables();
@@ -212,6 +221,21 @@ void PPU::Clock()
       pixel_y = 0;
     }
   }
+}
+
+u16 PPU::NametableMirroring(u16 addr)
+{
+  if (addr >= 0x2000 && addr < 0x3F00)
+  {
+    bool is_horizontal = cart->GetDescription().HardwiredMirroringModeIsVertical;
+    u16 rel = addr & 0x3FF;
+    if (is_horizontal)
+      return (addr < 0x2800) ? (0x2000 | (addr & 0x3FF)) : (0x2800 | (addr & 0x3FF));
+    else
+      return addr & (~0x0800);
+  }
+  else
+    return addr;
 }
 
 u8 PPU::ppuRead(u16 addr)
@@ -227,21 +251,16 @@ u8 PPU::ppuRead(u16 addr)
   }
   else if (addr < 0x3F00)
   {
-    u16 effective = addr & 0x2FFF;
-    bool is_horizontal = cart->GetDescription().HardwiredMirroringModeIsVertical;
-
-    if (is_horizontal)
-      //effective = (addr < 0x2800) ? (0x2000 | (addr & 0x3FF)) : (0x2800 | (addr & 0x3FF));
-      effective &= 0xF7FF;
-    else
-      //effective &= 0x27FF;
-      effective &= 0xFBFF;
-
-    return vram[effective];
+    return vram[NametableMirroring(addr & 0x2FFF)];
   }
   else if (addr < 0x4000)
   {
+    //Addresses $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
     u16 effective = 0x3F00 | (addr & 0x00FF);
+
+    if (effective == 0x3F10 || effective == 0x3F14 || effective == 0x3F18 || effective == 0x3F1C)
+      effective &= 0xFF0F;
+
     return vram[effective];
   }
   else
@@ -303,8 +322,6 @@ void PPU::render_pattern_tables()
 
 void PPU::render_pixel()
 {
-  u8 val = 0;
-
   u8 *pixels = frame_buffer.Data();
   if (pixel_x >= WIDTH || pixel_y >= HEIGHT)
     return;
@@ -318,52 +335,118 @@ void PPU::render_pixel()
   }
 
   // Get background color
-  int ppu_scroll_x = scroll_x + ((PPUCTRL >> 0) & 1) * 256;
-  int ppu_scroll_y = scroll_y + ((PPUCTRL >> 1) & 1) * 240;
+  int ppu_scroll_x = scroll_x + ((PPUCTRL >> 0) & 1 ? 256 : 0);
+  int ppu_scroll_y = scroll_y + ((PPUCTRL >> 1) & 1 ? 240 : 0);
 
-  int which_nametable = 0;
   int nametable_x = (ppu_scroll_x + pixel_x) % 512;
+  int nametable_y = (ppu_scroll_y + pixel_y) % 480;
+
+  u16 which_nametable = 0;
   if (nametable_x >= 256)
   {
     which_nametable += 1;
     nametable_x -= 256;
   }
 
-  int nametable_y = (ppu_scroll_y + pixel_y) % 480;
   if (nametable_y >= 240)
   {
     which_nametable += 2;
     nametable_y -= 240;
   }
 
-  int nametable_tile_x = nametable_x / 8;
-  int nametable_tile_y = nametable_y / 8;
+  u8 master_palette_index_bg = 0;
+  u8 bg_color_index = 0;
 
-  int nametable_start = 0x2000 + 0x400 * which_nametable;
+  // Background
+  {
+    int nametable_tile_x = nametable_x / 8;
+    int nametable_tile_y = nametable_y / 8;
 
-  u16 nt_byte_addr = nametable_start + nametable_tile_y * 32 + nametable_tile_x;
-  //printf("NTNT 0x%04X\n", nt_byte_addr);
-  u16 pattern_table_index = ppuRead(nt_byte_addr);
+    u16 nametable_start = 0x2000 + 0x400 * which_nametable;
+    u16 nt_byte_addr = nametable_start + 32 * nametable_tile_y + nametable_tile_x; //(nametable_tile_y * 32 + nametable_tile_x);
+    u16 pattern_table_index = ppuRead(nt_byte_addr);
 
-  u8 fine_x = nametable_x & 7;
-  u8 fine_y = nametable_y & 7;
+    u8 fine_x = nametable_x & 7;
+    u8 fine_y = nametable_y & 7;
 
-  // PPUCTRL marks whether the background tiles from from the 'left' or 'right' pattern tables.
-  u16 bg_pattern_base = BGPatternTableAddress ? 0x1000 : 0x0000;
+    // PPUCTRL marks whether the background tiles from from the 'left' or 'right' pattern tables.
+    u16 bg_pattern_base = BGPatternTableAddress ? 0x1000 : 0x0000;
 
-  u8 lo_bit = (ppuRead(bg_pattern_base | (pattern_table_index << 4) | 0b0000 | fine_y) >> (7 - fine_x)) & 1;
-  u8 hi_bit = (ppuRead(bg_pattern_base | (pattern_table_index << 4) | 0b1000 | fine_y) >> (7 - fine_x)) & 1;
+    u8 lo_bit = (ppuRead(bg_pattern_base | (pattern_table_index << 4) | 0b0000 | fine_y) >> (7 - fine_x)) & 1;
+    u8 hi_bit = (ppuRead(bg_pattern_base | (pattern_table_index << 4) | 0b1000 | fine_y) >> (7 - fine_x)) & 1;
+    bg_color_index = lo_bit | (hi_bit << 1);
 
-  val = lo_bit | (hi_bit << 1);
+    // Which palette (from the attribute table at the end of this nametable)
+    u8 attribute_index = (nametable_tile_y / 4) * 8 + (nametable_tile_x / 4);
+    u8 attribute_byte = ppuRead(nametable_start + 0x3C0 + attribute_index);
+    u8 attribute_bits = ((nametable_x % 32) / 16) * 2 + ((nametable_y % 32) / 16) * 4;
+    u8 bg_pal_numb = (attribute_byte >> attribute_bits) & 0b11;
+
+    master_palette_index_bg = ppuRead(0x3F00 + 4 * bg_pal_numb + bg_color_index);
+  }
 
   // Get sprite color
+  u8 master_palette_index_sprite = 0;
+  u8 sprite_color_index = 0;
+  bool sprite_has_priority = false;
+
+  {
+#pragma pack(1)
+    struct SpriteData
+    {
+      u8 y;
+      u8 tile_index;
+      u8 attributes;
+      u8 x;
+    };
+
+    // For each possible sprite, compute which pixel would land here
+    u16 sprite_pattern_data_address = SpritePatternTableAddress ? 0x1000 : 0x0000;
+
+    for (int sprite_i = 0; sprite_i < 64; ++sprite_i)
+    {
+      const SpriteData *sprite_data = (SpriteData *)&OAM_RAM[4 * sprite_i];
+      u8 sprite_palette_num = sprite_data->attributes & 0x03;
+      bool sprite_flip_horizontal = sprite_data->attributes & 0x40;
+      bool sprite_flip_vertical = sprite_data->attributes & 0x80;
+
+      // TODO : Assumes 8x8 sprites
+      int sprite_pattern_x = pixel_x - sprite_data->x;
+      int sprite_pattern_y = pixel_y - sprite_data->y - 1;
+
+      if (sprite_pattern_x >= 0 && sprite_pattern_x < 8)
+        if (sprite_pattern_y >= 0 && sprite_pattern_y < 8)
+        {
+          if (sprite_flip_horizontal)
+            sprite_pattern_x = 7 - sprite_pattern_x;
+          if (sprite_flip_vertical)
+            sprite_pattern_y = 7 - sprite_pattern_y;
+
+          sprite_pattern_x &= 0b111;
+          sprite_pattern_y &= 0b111;
+
+          u8 lo_bit = (ppuRead(sprite_pattern_data_address | (sprite_data->tile_index << 4) | 0b0000 | sprite_pattern_y) >> (7 - sprite_pattern_x)) & 1;
+          u8 hi_bit = (ppuRead(sprite_pattern_data_address | (sprite_data->tile_index << 4) | 0b1000 | sprite_pattern_y) >> (7 - sprite_pattern_x)) & 1;
+          sprite_color_index = lo_bit | (hi_bit << 1);
+
+          master_palette_index_sprite = ppuRead(0x3F10 + 4 * sprite_palette_num + sprite_color_index);
+          sprite_has_priority = (sprite_data->attributes & 0x20) == 0;
+
+          // TODO : This is almost totally correct, but not quite
+          if (ShowBackground && ShowSprites && bg_color_index && sprite_color_index && pixel_x < 255 && sprite_i == 0)
+            SpriteZeroHit = 1;
+
+          if (sprite_color_index)
+            break;
+        }
+    }
+  }
 
   // Combine
-
-  u8 palette_number = 0;
-  u8 color_index = val;
-  if (color_index == 0)
-    palette_number = 0;
+  // TODO
+  u8 output_color_index = master_palette_index_bg;
+  if ((bg_color_index == 0 && sprite_color_index > 0) || (sprite_has_priority && sprite_color_index))
+    output_color_index = master_palette_index_sprite;
 
   const auto set_pixel_color = [&](int x, int y, u8 color_index) {
     u32 pixel_num = WIDTH * y + x;
@@ -377,6 +460,5 @@ void PPU::render_pixel()
     pixels[3 * pixel_num + 2] = b;
   };
 
-  u8 master_palette_index = ppuRead(0x3F00 + 4 * palette_number + color_index);
-  set_pixel_color(pixel_x, pixel_y, master_palette_index);
+  set_pixel_color(pixel_x, pixel_y, output_color_index);
 }

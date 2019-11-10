@@ -3,7 +3,7 @@
 #include <imgui_impl_opengl3.h>
 #include <functional>
 
-#include <SDL2/SDL.h>
+#include <SDL.h>
 #include "./imgui_context.h"
 
 ImGuiContext::ImGuiContext()

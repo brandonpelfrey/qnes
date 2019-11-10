@@ -69,7 +69,6 @@ private:
   // 3) Execute instruction logic which will act on fetched_data.
   u8 opcode;
   u16 addr_rel, addr_abs;
-  u8 fetched_data;
 
   void SetNZ(u8 value);
 
@@ -179,7 +178,7 @@ public:
   void Reset();
   void SoftReset(u16 pc);
   void Debug();
-  void WTF();
+  ~CPU();
 
   void SetPC(u16 addr) { pc = addr; }
 
@@ -191,6 +190,7 @@ public:
     u16 pc;
     u8 instruction_bytes[3];
     u8 num_instruction_bytes;
+    u16 computed_operand;
 
     char *buffer;
     int buffer_len;
@@ -199,6 +199,7 @@ public:
 
 private:
   CPUDebugging debug_state;
+  u16 opcode_pc;
 
 public:
   CPUDebugging &DebuggingControls() { return debug_state; }

@@ -1,6 +1,18 @@
 #include <cassert>
 #include "core/bus.h"
 
+Bus::Bus()
+{
+  RAM = new u8[0x0800];
+  RAMWriteLastPC = new u16[0x0800];
+}
+
+Bus::~Bus()
+{
+  delete[] RAM;
+  delete[] RAMWriteLastPC;
+}
+
 u8 Bus::Read(u16 address, bool affects_state)
 {
   u8 val;

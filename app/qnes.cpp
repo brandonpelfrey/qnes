@@ -17,9 +17,11 @@ int main(int argc, char **argv)
   console->HardReset();
   //console->GetCPU()->SoftReset(0xC000);
 
+  for (int frame = 0; frame < 2000; ++frame)
+    console->StepFrame();
 
-  Frontend *frontend = new SDL2GLFrontend();
-  frontend->SetConsole(console);
-  frontend->MainLoop();
+  //Frontend *frontend = new SDL2GLFrontend();
+  //frontend->SetConsole(console);
+  //frontend->MainLoop();
   return 0;
 }

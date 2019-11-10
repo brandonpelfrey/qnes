@@ -1,51 +1,41 @@
+#include <map>
+#include <algorithm>
 #include <imgui.h>
 //#include "imgui_impl.h"
 //#include "imgui_fonts.h"
 
-//#include "cpu/debug.h"
+#include "core/cpu_debug.h"
 #include "core/state.h"
 #include "frontend/window_cpu.h"
+#include "frontend/imgui_memory_editor.h"
 
-const int DISASSEMBLY_ENTRIES = 256;
-const int DISASSEMBLY_LENGTHS = 512;
-static CPU::DisassemblyEntry dis_entries[DISASSEMBLY_ENTRIES];
+static MemoryEditor mem_edit_window;
 
-CPUWindow::CPUWindow(std::shared_ptr<Console> console,
-                     std::atomic<uint64_t> *cpu_continue,
-                     ImFont *font)
-    : Window(console, font), m_cpu_continue(cpu_continue)
+void HelperText(const char *text)
 {
+  if (ImGui::IsItemHovered())
+    ImGui::SetTooltip(text);
+}
+
+CPUWindow::CPUWindow(std::shared_ptr<Console> console, ImFont *font)
+    : Window(console, font)
+{
+  dis_entries.resize(DISASSEMBLY_ENTRIES);
   for (int i = 0; i < DISASSEMBLY_ENTRIES; ++i)
   {
     dis_entries[i].buffer = new char[DISASSEMBLY_LENGTHS];
     dis_entries[i].buffer_len = DISASSEMBLY_LENGTHS;
   }
 
+  mem_edit_window.Cols = 8;
+  mem_edit_window.GetLastPCForWrite = [&](u16 addr) -> u16 {
+    if (addr < 0x800)
+      return m_console->GetBus()->GetLastRAMWritePC(addr);
+    return 0;
+  };
+
   return;
 }
-
-/*
-void CPUWindow::breakpoint_add(u32 address)
-{
-  if (m_breakpoints.empty())
-  {
-    //m_console->cpu()->debug_enable(true);
-    //m_console->GetCPU()->DebugEnable
-  }
-
-  m_console->cpu()->debug_breakpoint_add(address);
-}
-
-void CPUWindow::breakpoint_remove(u32 address)
-{
-  if (m_breakpoints.size() == 1)
-  {
-    m_console->cpu()->debug_enable(false);
-  }
-
-  m_console->cpu()->debug_breakpoint_remove(address);
-}
-*/
 
 void CPUWindow::render_registers()
 {
@@ -57,30 +47,34 @@ void CPUWindow::render_registers()
 
   /* Status Register / Saved Status Register + Misc. Registers */
   {
-    auto colorize = [&color_active, &color_inactive](bool active) {
-      return active ? color_active : color_inactive;
-    };
+    ImGui::Text("Status: ");
+    ImGui::SameLine();
 
-    ImGui::Text("SR:  ");
-    ImGui::SameLine();
-    ImGui::TextColored(colorize(state.p & 0x80), "N");
-    ImGui::SameLine();
-    ImGui::TextColored(colorize(state.p & 0x40), "V");
-    ImGui::SameLine();
-    ImGui::TextColored(colorize(state.p & 0x20), ".");
-    ImGui::SameLine();
-    ImGui::TextColored(colorize(state.p & 0x10), ".");
-    ImGui::SameLine();
-    ImGui::TextColored(colorize(state.p & 0x08), "D");
-    ImGui::SameLine();
-    ImGui::TextColored(colorize(state.p & 0x04), "I");
-    ImGui::SameLine();
-    ImGui::TextColored(colorize(state.p & 0x02), "Z");
-    ImGui::SameLine();
-    ImGui::TextColored(colorize(state.p & 0x01), "C");
+#define SHOW_BIT(bitmask, str)                                                  \
+  ImGui::TextColored((state.p & bitmask) ? color_active : color_inactive, str); \
+  ImGui::SameLine();
+
+    SHOW_BIT(0x80, "N")
+    SHOW_BIT(0x40, "V")
+    SHOW_BIT(0x20, ".")
+    SHOW_BIT(0x10, ".")
+    SHOW_BIT(0x08, "D")
+    SHOW_BIT(0x04, "I")
+    SHOW_BIT(0x02, "Z")
+    SHOW_BIT(0x01, "C")
+#undef SHOW_BIT
 
     ImGui::SameLine();
-    ImGui::Text("    PC %04X  A %02X  X %02X  Y %02X  P %02X", state.pc, state.a, state.x, state.y, state.p);
+    ImGui::Text("    PC %04X  A %02X  X %02X  Y %02X  SP %02X, P %02X", state.pc, state.a, state.x, state.y, state.s, state.p);
+
+    /*
+    u8 nmi_high, nmi_low, reset_high, reset_low;
+    m_console->GetBus()->GetCartridge()->CPURead(0xFFFA, nmi_low);
+    m_console->GetBus()->GetCartridge()->CPURead(0xFFFB, nmi_high);
+    m_console->GetBus()->GetCartridge()->CPURead(0xFFFC, reset_low);
+    m_console->GetBus()->GetCartridge()->CPURead(0xFFFD, reset_high);
+    ImGui::Text("[NMI @ $%02X%02X, RESET @ $%02X%02X]", nmi_high, nmi_low, reset_high, reset_low);
+    */
   }
 }
 
@@ -90,12 +84,13 @@ void CPUWindow::render_disassembly(int disassembly_lines)
 
   State state;
   m_console->GetCPU()->GetState(&state);
-  m_console->GetCPU()->Disassemble(state.pc - disassembly_lines / 3, disassembly_lines, dis_entries);
+  //printf("0x%04X\n", state.pc);
+  m_console->GetCPU()->Disassemble(state.pc - disassembly_lines / 3, disassembly_lines, &dis_entries[0]);
 
   for (int i = 0; i < disassembly_lines; ++i)
   {
     const auto &entry(dis_entries[i]);
-    const bool is_breakpoint = false; //breakpoint_check(pc);
+    const bool is_breakpoint = m_console->GetCPU()->DebuggingControls().Has(entry.pc, Breakpoint::EXECUTE);
     const bool is_current = (entry.pc == state.pc);
 
     if (is_current)
@@ -117,7 +112,17 @@ void CPUWindow::render_disassembly(int disassembly_lines)
     static char line[512];
     char *line_cur = line;
     line_cur += sprintf(line_cur, "%04X  ", entry.pc);
-    line_cur += sprintf(line_cur, "%s", entry.buffer);
+
+    for (int j = 0; j < 3; ++j)
+      if (j < entry.num_instruction_bytes)
+        line_cur += sprintf(line_cur, "%02X ", entry.instruction_bytes[j]);
+      else
+        line_cur += sprintf(line_cur, "   ");
+
+    line_cur += sprintf(line_cur, " %-11s", entry.buffer);
+
+    if (entry.computed_operand != 0xFFFF)
+      line_cur += sprintf(line_cur, " # %04X", entry.computed_operand);
 
     if (ImGui::Selectable(line, is_current))
     {
@@ -129,11 +134,11 @@ void CPUWindow::render_disassembly(int disassembly_lines)
       {
         if (is_breakpoint)
         {
-          //breakpoint_remove(pc);
+          m_console->GetCPU()->DebuggingControls().Remove(entry.pc);
         }
         else
         {
-          //breakpoint_add(pc);
+          m_console->GetCPU()->DebuggingControls().Add(Breakpoint{entry.pc});
         }
       }
     }
@@ -146,9 +151,8 @@ void CPUWindow::render_disassembly(int disassembly_lines)
 
 void CPUWindow::render(bool embed)
 {
-  /* Update list of active CPU breakpoints */
-  //m_breakpoints.clear();
-  //m_console->cpu()->debug_breakpoint_list(&m_breakpoints);
+  State state;
+  m_console->GetCPU()->GetState(&state);
 
   ImGui::GetStyle().Colors[ImGuiCol_WindowBg].w = 0.95f;
   ImGui::PushFont(m_font);
@@ -162,25 +166,23 @@ void CPUWindow::render(bool embed)
     return;
   }
 
-  /* Register States */
-  {
-    render_registers();
-  }
-
+  render_registers();
   ImGui::Separator();
-
-  ImGui::Columns(2);
+  ImGui::Columns(3);
 
   /* Disassembly view */
   {
     static char address_input[32] = {};
 
+    // Dissasembly text area
     ImGui::BeginChild("scrolling2", ImVec2(0, -ImGui::GetItemsLineHeightWithSpacing()));
     const unsigned disassembly_lines =
-        ImGui::GetContentRegionAvail().y / ImGui::GetTextLineHeightWithSpacing();
+        std::min((unsigned)(ImGui::GetContentRegionAvail().y / ImGui::GetTextLineHeightWithSpacing()),
+                 (unsigned)DISASSEMBLY_ENTRIES);
     render_disassembly(disassembly_lines);
     ImGui::EndChild();
 
+    // Controls beneath
     ImGui::PushItemWidth(ImGui::GetContentRegionAvailWidth() / 5);
     ImGui::InputText("##addrinput", address_input, sizeof(address_input));
     ImGui::PopItemWidth();
@@ -207,7 +209,7 @@ void CPUWindow::render(bool embed)
     if (ImGui::Button("Breakpoint"))
     {
       const char *input = address_input;
-      u32 address;
+      u16 address;
 
       if (strlen(input) > 2 && input[0] == '0' && input[1] == 'x')
       {
@@ -216,31 +218,28 @@ void CPUWindow::render(bool embed)
 
       if (sscanf(input, "%x", &address) == 1)
       {
-        //breakpoint_add(address);
+        m_console->GetCPU()->DebuggingControls().Add(Breakpoint(address));
         address_input[0] = 0;
       }
     }
 
     ImGui::SameLine();
-    if (ImGui::Button("Halt"))
-    {
-      m_cpu_continue->store(0);
-    }
-
-    ImGui::SameLine();
     if (ImGui::Button("Continue"))
     {
-      //m_cpu_continue->store(UINT64_MAX);
+      // HACK : Without doing a step, we would immediately pause if we're on a breakpoint right now.
+      if (m_console->GetCPU()->DebuggingControls().Has(state.pc))
+        m_console->GetCPU()->Step();
       m_console->GetCPU()->Continue();
     }
+    HelperText("Exit step mode and continue execution");
 
     ImGui::SameLine();
     if (ImGui::Button("Step"))
     {
-      //m_cpu_continue->store(1);
       m_console->GetCPU()->Pause();
       m_console->GetCPU()->Step();
     }
+    HelperText("Step a single instruction and remain paused");
   }
 
   ImGui::NextColumn();
@@ -250,30 +249,40 @@ void CPUWindow::render(bool embed)
     static const ImVec4 color_active(0.9f, 0.9f, 0.9f, 1.0f);
     static const ImVec4 color_hit(0.7f, 1.0f, 0.7f, 1.0f);
 
-    ImGui::BeginChild("scrolling", ImVec2(0, -ImGui::GetItemsLineHeightWithSpacing()));
+    ImGui::BeginChild("breakpoint_listing", ImVec2(0, -ImGui::GetItemsLineHeightWithSpacing()));
 
-    /*
-    const u32 pc = m_console->cpu()->registers().PC;
-    for (unsigned i = 0; i < m_breakpoints.size(); ++i)
+    const auto &breakpoints = m_console->GetCPU()->DebuggingControls().GetAll();
+    std::vector<u16> removals;
+    for (const auto breakpoint : breakpoints)
     {
       char label[32];
-
-      snprintf(label, sizeof(label), "Remove##%d", i);
+      snprintf(label, sizeof(label), "Remove##%d", breakpoint.first);
       if (ImGui::Button(label))
       {
-        breakpoint_remove(m_breakpoints[i]);
+        removals.push_back(breakpoint.first);
       }
-      ImGui::SameLine();
-      ImGui::TextColored((m_breakpoints[i] == pc) ? color_hit : color_active, "0x%08x",
-                         m_breakpoints[i]);
-    }
-    */
-    ImGui::EndChild();
 
+      ImGui::SameLine();
+      ImGui::TextColored((breakpoint.first == state.pc) ? color_hit : color_active, "0x%04x",
+                         breakpoint.first);
+    }
+
+    for (const auto removal : removals)
+      m_console->GetCPU()->DebuggingControls().Remove(removal);
+
+    ImGui::EndChild();
     if (ImGui::Button("Reboot"))
     {
       m_console->HardReset();
     }
+  }
+
+  ImGui::NextColumn();
+
+  {
+    ImGui::BeginChild("memory_editor", ImVec2(0, -ImGui::GetItemsLineHeightWithSpacing()));
+    mem_edit_window.DrawContents(m_console->GetBus()->GetRAMView(), 0x0800, 0);
+    ImGui::EndChild();
   }
 
   ImGui::NextColumn();

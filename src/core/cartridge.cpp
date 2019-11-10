@@ -70,7 +70,7 @@ Cartridge *Cartridge::LoadRomFile(const char *path)
 
   result->description = description;
 
-  int prg_rom_bytes = 0x4000 * description.PRG_ROM_16KB_Multiple;
+  int prg_rom_bytes = 16384 * description.PRG_ROM_16KB_Multiple;
   result->PRG_ROM = new u8[prg_rom_bytes];
   fread(result->PRG_ROM, sizeof(u8), prg_rom_bytes, romFile);
 

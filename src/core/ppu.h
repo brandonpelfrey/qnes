@@ -56,6 +56,7 @@ private:
 
   union {
     u8 PPUSTATUS;
+#pragma pack(1)
     struct
     {
       u8 LeastSignificantBitsForRecentWrite : 5;
@@ -78,6 +79,7 @@ private:
   void render_pixel();
   void render_pattern_tables();
 
+  u16 NametableMirroring(u16 addr);
   u8 ppuRead(u16 addr);
 
 public:

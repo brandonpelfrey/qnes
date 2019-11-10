@@ -4,8 +4,8 @@
 #include <imgui.h>
 #include <imgui_impl_sdl.h>
 
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_opengl.h>
+#include <SDL.h>
+#include <SDL_opengl.h>
 
 #include <unordered_map>
 #include <thread>
@@ -26,7 +26,6 @@ GLint status;
 GLuint shader_w, shader_h;
 
 CPUWindow *cpu_window;
-static MemoryEditor mem_edit_window;
 
 const char *vertexSource = R"glsl(
     #version 150 core
@@ -59,20 +58,7 @@ const char *fragmentSource = R"glsl(
 void SDL2GLFrontend::imgui()
 {
   ImGui::StyleColorsDark();
-
-  static int call_number = 0;
-  static float clear_color[3] = {.2, .3, .3};
-
-  {
-    ImGui::Begin("Basic ImGui Window");
-    ImGui::Text("Current Frame is %u", call_number++);
-    ImGui::ColorEdit3("Change Background Color", (float *)&clear_color);
-    ImGui::End();
-  }
-
   cpu_window->draw(false);
-
-  mem_edit_window.DrawWindow("CPU RAM", console->GetBus()->GetRAMView(), 0x0800, 0);
 }
 
 SDL2GLFrontend::SDL2GLFrontend() noexcept
@@ -114,6 +100,9 @@ SDL2GLFrontend::SDL2GLFrontend() noexcept
 
   glEnable(GL_TEXTURE_2D);
   glGenTextures(1, &framebuffer_texture);
+  glBindTexture(GL_TEXTURE_2D, framebuffer_texture);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
   // VAO
   glGenVertexArrays(1, &vao);
@@ -169,15 +158,20 @@ SDL2GLFrontend::SDL2GLFrontend() noexcept
   glEnableVertexAttribArray(texAttrib);
   glVertexAttribPointer(texAttrib, 2, GL_FLOAT, GL_FALSE, size_of_vertex, (void *)(2 * sizeof(GLfloat)));
 
-  cpu_window = new CPUWindow(console, nullptr, nullptr);
+  imgui_context = new ImGuiContext();
+
+  cpu_window = new CPUWindow(console, nullptr);
+  cpu_window->SetConsole(console);
+}
+
+SDL2GLFrontend::~SDL2GLFrontend()
+{
+  delete imgui_context;
+  delete window;
 }
 
 void SDL2GLFrontend::MainLoop()
 {
-  cpu_window->SetConsole(console);
-
-  ImGuiContext imgui_context;
-
   while (!should_close)
   {
     SDL_Delay(1);
@@ -188,13 +182,9 @@ void SDL2GLFrontend::MainLoop()
     // Grab framebuffer
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, framebuffer_texture);
-    //Texture &display(console->GetPPU()->GetPatternTableLeftTexture());
+
     Texture &display(console->GetPPU()->GetFrameBufferTexture());
-    u8 *display_data = display.Data();
-    //printf("%u x %u\n", display.GetWidth(), display.GetHeight());
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, display.GetWidth(), display.GetHeight(), 0, GL_RGB, GL_UNSIGNED_BYTE, display_data);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, display.GetWidth(), display.GetHeight(), 0, GL_RGB, GL_UNSIGNED_BYTE, display.Data());
 
     static char title[256];
     sprintf(title, "Frames: %u", console->GetFrameCount());
@@ -296,9 +286,9 @@ void SDL2GLFrontend::MainLoop()
     glEnd();
     */
 
-    imgui_context.StartImGuiFrame();
+    imgui_context->StartImGuiFrame();
     imgui();
-    imgui_context.EndImGuiFrame();
+    imgui_context->EndImGuiFrame();
 
     SDL_GL_SwapWindow(window);
   }
