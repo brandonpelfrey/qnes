@@ -4,7 +4,6 @@ import os, sys, subprocess
 # Root compilation settings, shared among all builds
 
 env = Environment()
-env.Replace(CXX='g++-9')
 env.Append(CPPFLAGS = ['-Wall'])
 env.Append(CXXFLAGS = ['-std=c++17', '-O0', '-g'])
 env.Append(CPPFLAGS = ['-I./vendor/glad/include'])
@@ -31,8 +30,7 @@ if sys.platform == 'darwin':
   
   qnes.Append(FRAMEWORKS=' OpenGL')
 else:
-  print('%s is not a supported platform. Please modify the SConstruct file' % (sys.platform))
-  sys.exit(1)
+  qnes.Append(LIBS=['GL', 'dl'])
 
 # qnes Source Files
 qnes_src = []

@@ -1,10 +1,13 @@
 #include <cassert>
 #include "core/bus.h"
+#include <cstring>
 
 Bus::Bus()
 {
   RAM = new u8[0x0800];
+  memset(RAM, 0, 0x0800);
   RAMWriteLastPC = new u16[0x0800];
+  memset(RAMWriteLastPC, 0, 0x0800);
 }
 
 Bus::~Bus()

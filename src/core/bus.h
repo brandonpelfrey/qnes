@@ -39,7 +39,7 @@ public:
 
   void SetLastRAMWritePC(u16 ram_addr, u16 pc)
   {
-    RAMWriteLastPC[ram_addr] = pc;
+    RAMWriteLastPC[ram_addr & 0x7FF] = pc;
   }
 
   u16 GetLastRAMWritePC(u16 ram_addr)

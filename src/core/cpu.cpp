@@ -16,10 +16,15 @@
 
 CPU::CPU()
 {
-  instructions.resize(256);
+	total_clock_cycles = 0;
+	instruction_remaining_cycles = 0;
+  a = x = y = p = 0;
+  oam_dma_cycles_remaining = 0;
+
+  instructions.clear();
   for (int i = 0; i < 256; ++i)
   {
-    instructions[i] = {"???", &CPU::NOP, &CPU::addr_implied, 2};
+    instructions.push_back({"???", &CPU::NOP, &CPU::addr_implied, 2});
   }
 
   // ADC
@@ -279,7 +284,7 @@ void CPU::SoftReset(u16 newpc)
 void CPU::SetFlag(Flags flag, u8 value)
 {
   if (value != 0)
-    p |= flag;
+    p |= (flag & 0xFF);
   else
     p &= (~flag) & 0xFF;
 }

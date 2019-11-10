@@ -23,7 +23,6 @@ private:
   u16 vram_addr;
 
   u8 PPU_DATA_read_buffer;
-  u8 OAM_RAM[256];
 
   union {
     u8 PPUCTRL;
@@ -70,6 +69,7 @@ private:
 
   // 16KB address space, some of it is mirrors.
   u8 *vram;
+  u8 *OAM_RAM;
 
   Texture frame_buffer;
   Texture pattern_left;

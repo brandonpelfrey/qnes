@@ -17,6 +17,8 @@ PPU::PPU()
 {
   pixel_y = 0;
   pixel_x = 0;
+  nmi_latch = address_latch = PPU_DATA_read_buffer = 0;
+  OAMADDR = 0;
 
   PPUSTATUS = 0;
   PPUCTRL = 0;
@@ -27,7 +29,9 @@ PPU::PPU()
 
   address_latch = 0;
   vram = new u8[0x4000];
+  OAM_RAM = new u8[64 * 4];
   memset(vram, 0, 0x4000);
+  memset(OAM_RAM, 0, 64*4);
 
   frame_buffer.Resize(WIDTH, HEIGHT);
   pattern_left.Resize(128, 128);
