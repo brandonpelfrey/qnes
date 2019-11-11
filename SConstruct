@@ -5,7 +5,7 @@ import os, sys, subprocess
 
 env = Environment()
 env.Append(CPPFLAGS = ['-Wall'])
-env.Append(CXXFLAGS = ['-std=c++17', '-O0', '-g'])
+env.Append(CXXFLAGS = ['-std=c++17', '-O2', '-g'])
 env.Append(CPPFLAGS = ['-I./vendor/glad/include'])
 env.Append(CPPFLAGS = ['-I./vendor/imgui'])
 env.ParseConfig('sdl2-config --cflags --libs')
@@ -27,7 +27,6 @@ qnes.VariantDir('build', 'src', duplicate=0)
 qnes.Append(CPPFLAGS = ['-I./src'])
 
 if sys.platform == 'darwin':
-  
   qnes.Append(FRAMEWORKS=' OpenGL')
 else:
   qnes.Append(LIBS=['GL', 'dl'])

@@ -9,7 +9,7 @@ public:
   Window(std::shared_ptr<Console> console, ImFont *font)
     : m_console(console), m_font(font), m_is_visible(true)
   {
-    return;
+    printf("Window was constructed with console %p\n", console.get());
   }
 
   void draw(bool embed)

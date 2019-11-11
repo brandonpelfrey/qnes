@@ -31,7 +31,7 @@ PPU::PPU()
   vram = new u8[0x4000];
   OAM_RAM = new u8[64 * 4];
   memset(vram, 0, 0x4000);
-  memset(OAM_RAM, 0, 64*4);
+  memset(OAM_RAM, 0, 64 * 4);
 
   frame_buffer.Resize(WIDTH, HEIGHT);
   pattern_left.Resize(128, 128);
@@ -51,8 +51,9 @@ u8 PPU::Read(u16 addr)
   }
   else if (addr == 0x2002)
   {
-    u8 result = (PPUSTATUS & 0xE0) | (PPU_DATA_read_buffer & 0x1F);
+    u8 result = PPUSTATUS; //(PPUSTATUS & 0xE0) | (PPU_DATA_read_buffer & 0x1F);
 
+    //printf("Read from PPUStatus will return %02X\n", result);
     VerticalBlank = 0; // Clear Vertical blank on PPUStatus read.
     address_latch = 0;
     return result;
@@ -60,11 +61,14 @@ u8 PPU::Read(u16 addr)
   else if (addr == 0x2007)
   {
     // Read @ vram_addr pointer
-
     u8 return_value = PPU_DATA_read_buffer;
+
     PPU_DATA_read_buffer = ppuRead(vram_addr & 0x3FFF);
+
     if (vram_addr >= 0x3F00)
       return_value = PPU_DATA_read_buffer;
+
+    printf("Read PPUDATA @ 0x%04X -> 0x%02X\n", vram_addr & 0x3FFF, return_value);
 
     u8 addr_increment = (PPUCTRL & 0b100) ? 32 : 1;
     vram_addr = (vram_addr + addr_increment) & 0x3FFF;
@@ -102,6 +106,11 @@ void PPU::Write(u16 addr, u8 val)
   else if (addr == 0x2003)
   {
     OAMADDR = val;
+  }
+  else if (addr == 0x2004)
+  {
+    OAM_RAM[OAMADDR] = val;
+    OAMADDR = (OAMADDR + 1) % 64;
   }
   else if (addr == 0x2005)
   {
@@ -181,12 +190,13 @@ void PPU::Clock()
   if (pixel_y == FIRST_VERTICAL_BLANK_LINE && pixel_x == 1)
   {
     VerticalBlank = 1;
-    //printf("scanline %u -- PPUSTATUS = 0x%02X, PPUCTRL = 0x%02X\n", pixel_y, PPUSTATUS, PPUCTRL);
+    printf("scanline %u -- PPUSTATUS = 0x%02X, PPUCTRL = 0x%02X\n", pixel_y, PPUSTATUS, PPUCTRL);
   }
 
   // This is separated from when we enter Vertical Blank, because if a user does not
   // read PPUSTATUS to clear VerticalBlank flag, they can toggle GenerateNMI multiple
   // times and generate multiple NMIs. This code allows that to happen.
+
   if (VerticalBlank && GenerateNMIOnVBI && nmi_latch == 0)
   {
     nmi_latch = 1;
@@ -251,7 +261,8 @@ u8 PPU::ppuRead(u16 addr)
   }
   else if (addr >= 0x0000 && addr < 0x2000)
   {
-    assert(0);
+    return vram[addr & 0x1FFF];
+    //assert(0);
   }
   else if (addr < 0x3F00)
   {
@@ -332,11 +343,7 @@ void PPU::render_pixel()
 
   ////////////////////////////////////////////////////
 
-  if (ShowBGInLeftMost == 0 && pixel_x < 8)
-  {
-    // TODO : Draw BG color
-    return;
-  }
+  u8 master_palette_index_bg = ppuRead(0x3F00);
 
   // Get background color
   int ppu_scroll_x = scroll_x + ((PPUCTRL >> 0) & 1 ? 256 : 0);
@@ -358,10 +365,10 @@ void PPU::render_pixel()
     nametable_y -= 240;
   }
 
-  u8 master_palette_index_bg = 0;
   u8 bg_color_index = 0;
 
   // Background
+  if (ShowBackground && (ShowBGInLeftMost || (!ShowBGInLeftMost && pixel_x >= 8)))
   {
     int nametable_tile_x = nametable_x / 8;
     int nametable_tile_y = nametable_y / 8;
@@ -394,6 +401,7 @@ void PPU::render_pixel()
   u8 sprite_color_index = 0;
   bool sprite_has_priority = false;
 
+  if (ShowSprites && (ShowSpritesInLeftMost || (!ShowSpritesInLeftMost && pixel_x >= 8)))
   {
 #pragma pack(1)
     struct SpriteData
@@ -405,7 +413,10 @@ void PPU::render_pixel()
     };
 
     // For each possible sprite, compute which pixel would land here
-    u16 sprite_pattern_data_address = SpritePatternTableAddress ? 0x1000 : 0x0000;
+
+    // Are we drawing 8x16 sprites?
+    const bool mode816 = (PPUCTRL & 0x20) != 0;
+    const int sprite_height = mode816 ? 16 : 8;
 
     for (int sprite_i = 0; sprite_i < 64; ++sprite_i)
     {
@@ -414,13 +425,32 @@ void PPU::render_pixel()
       bool sprite_flip_horizontal = sprite_data->attributes & 0x40;
       bool sprite_flip_vertical = sprite_data->attributes & 0x80;
 
+      if (sprite_data->x == 0)
+        continue;
+
       // TODO : Assumes 8x8 sprites
       int sprite_pattern_x = pixel_x - sprite_data->x;
-      int sprite_pattern_y = pixel_y - sprite_data->y - 1;
+      int sprite_pattern_y = pixel_y - (sprite_data->y + 1);
 
       if (sprite_pattern_x >= 0 && sprite_pattern_x < 8)
-        if (sprite_pattern_y >= 0 && sprite_pattern_y < 8)
+        if (sprite_pattern_y >= 0 && sprite_pattern_y < sprite_height)
         {
+          u16 sprite_pattern_data_address = SpritePatternTableAddress ? 0x1000 : 0x0000;
+          u16 tile_index = sprite_data->tile_index;
+
+          int which_tile = 0;
+          if (mode816)
+          {
+            if (sprite_pattern_y >= 8)
+              which_tile = 1;
+
+            if (sprite_flip_vertical)
+              which_tile = 1 - which_tile;
+
+            sprite_pattern_data_address = (tile_index & 1) ? 0x1000 : 0x0000;
+            tile_index = (tile_index & 0xFE) + which_tile;
+          }
+
           if (sprite_flip_horizontal)
             sprite_pattern_x = 7 - sprite_pattern_x;
           if (sprite_flip_vertical)
@@ -429,8 +459,8 @@ void PPU::render_pixel()
           sprite_pattern_x &= 0b111;
           sprite_pattern_y &= 0b111;
 
-          u8 lo_bit = (ppuRead(sprite_pattern_data_address | (sprite_data->tile_index << 4) | 0b0000 | sprite_pattern_y) >> (7 - sprite_pattern_x)) & 1;
-          u8 hi_bit = (ppuRead(sprite_pattern_data_address | (sprite_data->tile_index << 4) | 0b1000 | sprite_pattern_y) >> (7 - sprite_pattern_x)) & 1;
+          u8 lo_bit = (ppuRead(sprite_pattern_data_address | (tile_index << 4) | 0b0000 | sprite_pattern_y) >> (7 - sprite_pattern_x)) & 1;
+          u8 hi_bit = (ppuRead(sprite_pattern_data_address | (tile_index << 4) | 0b1000 | sprite_pattern_y) >> (7 - sprite_pattern_x)) & 1;
           sprite_color_index = lo_bit | (hi_bit << 1);
 
           master_palette_index_sprite = ppuRead(0x3F10 + 4 * sprite_palette_num + sprite_color_index);

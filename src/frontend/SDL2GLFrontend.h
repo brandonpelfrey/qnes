@@ -13,12 +13,13 @@ private:
   bool should_close;
   u32 framebuffer_texture;
   ImGuiContext *imgui_context;
+  std::shared_ptr<Console> console;
 
 private:
   void imgui();
 
 public:
-  SDL2GLFrontend() noexcept;
+  SDL2GLFrontend(std::shared_ptr<Console> console) noexcept;
   ~SDL2GLFrontend() ;
 
   void MainLoop();

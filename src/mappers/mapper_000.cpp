@@ -1,9 +1,14 @@
-#include "mappers/mapper_NROM.h"
+#include "mappers/mapper_000.h"
 #include "core/types.h"
 
 // https://wiki.nesdev.com/w/index.php/NROM
 
-bool Mapper_NROM::CPURead(u16 addr, u8 &val)
+Mapper_000::Mapper_000(CartridgeDescription description) noexcept
+    : description(description)
+{
+}
+
+bool Mapper_000::CPURead(u16 addr, u8 &val)
 {
   // CPU $6000-$7FFF: Family Basic only: PRG RAM, mirrored as necessary to fill entire 8 KiB window, write protectable with an external switch
   // CPU $8000-$BFFF: First 16 KB of ROM.
@@ -25,14 +30,14 @@ bool Mapper_NROM::CPURead(u16 addr, u8 &val)
   }
 }
 
-bool Mapper_NROM::CPUWrite(u16 addr, u8 val)
+bool Mapper_000::CPUWrite(u16 addr, u8 val)
 {
   return false;
 }
 
-bool Mapper_NROM::PPURead(u16 addr, u8 &val)
+bool Mapper_000::PPURead(u16 addr, u8 &val)
 {
-  if (addr <= 0x2000)
+  if (addr <= 0x2000 && description.CHR_ROM_8KB_Multiple > 0)
   {
     val = CHR_ROM[addr % (description.CHR_ROM_8KB_Multiple * 0x2000)];
     return true;
@@ -41,7 +46,7 @@ bool Mapper_NROM::PPURead(u16 addr, u8 &val)
   return false;
 }
 
-bool Mapper_NROM::PPUWrite(u16 addr, u8 val)
+bool Mapper_000::PPUWrite(u16 addr, u8 val)
 {
   return false;
 }

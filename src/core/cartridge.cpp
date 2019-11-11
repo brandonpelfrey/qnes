@@ -3,7 +3,10 @@
 #include <cstdlib>
 #include "core/cartridge.h"
 
-#include "mappers/mapper_NROM.h"
+#include "mappers/mapper_000.h"
+#include "mappers/mapper_001.h"
+#include "mappers/mapper_002.h"
+#include "mappers/mapper_003.h"
 
 Cartridge *Cartridge::LoadRomFile(const char *path)
 {
@@ -59,7 +62,19 @@ Cartridge *Cartridge::LoadRomFile(const char *path)
   switch (description.MapperNumber)
   {
   case 0:
-    result = new Mapper_NROM();
+    result = new Mapper_000(description);
+    break;
+
+  case 1:
+    result = new Mapper_001(description);
+    break;
+
+  case 2:
+    result = new Mapper_002(description);
+    break;
+
+    case 3:
+    result = new Mapper_003(description);
     break;
 
   default:
@@ -68,9 +83,7 @@ Cartridge *Cartridge::LoadRomFile(const char *path)
     break;
   }
 
-  result->description = description;
-
-  int prg_rom_bytes = 16384 * description.PRG_ROM_16KB_Multiple;
+  int prg_rom_bytes = 0x4000 * description.PRG_ROM_16KB_Multiple;
   result->PRG_ROM = new u8[prg_rom_bytes];
   fread(result->PRG_ROM, sizeof(u8), prg_rom_bytes, romFile);
 

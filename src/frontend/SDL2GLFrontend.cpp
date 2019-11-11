@@ -61,8 +61,9 @@ void SDL2GLFrontend::imgui()
   cpu_window->draw(false);
 }
 
-SDL2GLFrontend::SDL2GLFrontend() noexcept
+SDL2GLFrontend::SDL2GLFrontend(std::shared_ptr<Console> console) noexcept
 {
+  this->console = console;
   should_close = false;
 
   if (SDL_Init(SDL_INIT_EVERYTHING) != 0)
