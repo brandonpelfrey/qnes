@@ -12,6 +12,7 @@
 
 #include "./SDL2GLFrontend.h"
 #include "core/console.h"
+#include "core/trace_event.h"
 
 #include "frontend/window_cpu.h"
 #include "frontend/imgui_memory_editor.h"
@@ -58,7 +59,10 @@ const char *fragmentSource = R"glsl(
 void SDL2GLFrontend::imgui()
 {
   ImGui::StyleColorsDark();
+
+  imgui_context->StartImGuiFrame();
   cpu_window->draw(false);
+  imgui_context->EndImGuiFrame();
 }
 
 SDL2GLFrontend::SDL2GLFrontend(std::shared_ptr<Console> console) noexcept
@@ -175,17 +179,16 @@ void SDL2GLFrontend::MainLoop()
 {
   while (!should_close)
   {
+    TraceEvent main_loop;
+
     SDL_Delay(1);
 
-    if (!console->GetCPU()->IsPaused())
-      console->StepFrame();
-
-    // Grab framebuffer
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, framebuffer_texture);
-
-    Texture &display(console->GetPPU()->GetFrameBufferTexture());
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, display.GetWidth(), display.GetHeight(), 0, GL_RGB, GL_UNSIGNED_BYTE, display.Data());
+    {
+      TraceEvent cpu_step;
+      if (!console->GetCPU()->IsPaused())
+        console->StepFrame();
+      TraceEventEmitter::Instance()->Emit(cpu_step, "NESStepFrame");
+    }
 
     static char title[256];
     sprintf(title, "Frames: %u", console->GetFrameCount());
@@ -247,50 +250,38 @@ void SDL2GLFrontend::MainLoop()
     glClearColor(1, 0, 1, 1);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    // Combine the window aspect ratio and aspect ratio of the texture to be drawn
-    // to produce width and height variables in [0,1] which will fit inside
-    // a [-1,1] x [-1,1] square.
-    float window_aspect = (float)gl_drawable_width / (float)gl_drawable_height;
-    float texture_aspect = (float)display.GetWidth() / (float)display.GetHeight();
-    window_aspect /= texture_aspect;
-    float w = std::min(1.f, 1.f / window_aspect);
-    float h = std::min(1.f, 1.f * window_aspect);
-
-    //glEnable(GL_TEXTURE_2D);
-    //glBindTexture(GL_TEXTURE_2D, framebuffer_texture);
-
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
-    glColor3f(1, 1, 1);
+    // Render the framebuffer
+    {
+      glEnable(GL_TEXTURE_2D);
+      glBindTexture(GL_TEXTURE_2D, framebuffer_texture);
+      Texture &display(console->GetPPU()->GetFrameBufferTexture());
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, display.GetWidth(), display.GetHeight(), 0, GL_RGB, GL_UNSIGNED_BYTE, display.Data());
 
-    glUseProgram(shaderProgram);
-    glUniform1f(shader_w, w);
-    glUniform1f(shader_h, h);
+      // Combine the window aspect ratio and aspect ratio of the texture to be drawn
+      // to produce width and height variables in [0,1] which will fit inside
+      // a [-1,1] x [-1,1] square.
+      float window_aspect = (float)gl_drawable_width / (float)gl_drawable_height;
+      float texture_aspect = (float)display.GetWidth() / (float)display.GetHeight();
+      window_aspect /= texture_aspect;
+      float w = std::min(1.f, 1.f / window_aspect);
+      float h = std::min(1.f, 1.f * window_aspect);
 
-    glBindVertexArray(vao);
-    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+      glUseProgram(shaderProgram);
+      glUniform1f(shader_w, w);
+      glUniform1f(shader_h, h);
 
-    /*
-    glBegin(GL_QUADS);
-    glTexCoord2f(0, 1);
-    glVertex2f(-w, -h);
+      glColor3f(1, 1, 1);
+      glBindVertexArray(vao);
+      glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+    }
 
-    glTexCoord2f(1, 1);
-    glVertex2f(w, -h);
-
-    glTexCoord2f(1, 0);
-    glVertex2f(w, h);
-
-    glTexCoord2f(0, 0);
-    glVertex2f(-w, h);
-    glEnd();
-    */
-
-    imgui_context->StartImGuiFrame();
+    // Draw the debug tools
     imgui();
-    imgui_context->EndImGuiFrame();
 
     SDL_GL_SwapWindow(window);
+    TraceEventEmitter::Instance()->Emit(main_loop, "MainLoop");
   }
 }

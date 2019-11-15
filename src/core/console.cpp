@@ -1,5 +1,6 @@
 #include <memory>
 #include "console.h"
+#include "core/trace_event.h"
 
 Console::Console()
     : bus(std::make_shared<Bus>()),
@@ -33,7 +34,10 @@ void Console::HardReset()
 
 int Console::StepCPU()
 {
+  TraceEvent cpu_step;
   int cpuCycles = cpu->Step();
+  TraceEventEmitter::Instance()->Emit(cpu_step, "CPUStep");
+
   for (int ppu_cycles = 0; ppu_cycles < 3 * cpuCycles; ++ppu_cycles)
   {
     ppu->Clock();

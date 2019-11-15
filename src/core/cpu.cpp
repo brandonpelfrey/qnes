@@ -16,8 +16,8 @@
 
 CPU::CPU()
 {
-	total_clock_cycles = 0;
-	instruction_remaining_cycles = 0;
+  total_clock_cycles = 0;
+  instruction_remaining_cycles = 0;
   a = x = y = p = 0;
   oam_dma_cycles_remaining = 0;
 
