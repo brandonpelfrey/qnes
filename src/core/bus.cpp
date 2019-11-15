@@ -36,7 +36,8 @@ u8 Bus::Read(u16 address, bool affects_state)
   }
   else if (address >= 0x4000 && address < 0x4013)
   {
-    //assert(0 && "APU and IO read not implemented");
+    // TODO assert(0 && "APU and IO read not implemented");
+    return 0;
   }
   else if (address == 0x4016 || address == 0x4017)
   {
@@ -50,7 +51,7 @@ u8 Bus::Read(u16 address, bool affects_state)
   }
   else
   {
-    //assert(0);
+    assert(0);
   }
 }
 

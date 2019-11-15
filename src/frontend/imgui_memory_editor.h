@@ -403,7 +403,7 @@ struct MemoryEditor
                             sprintf(buff, "????");
 
                         if (ImGui::IsItemHovered())
-                            ImGui::SetTooltip(buff);
+                            ImGui::SetTooltip("%s", buff);
                             
                     }
                     if (!ReadOnly && ImGui::IsItemHovered() && ImGui::IsMouseClicked(0))

@@ -242,7 +242,6 @@ u16 PPU::NametableMirroring(u16 addr)
   if (addr >= 0x2000 && addr < 0x3F00)
   {
     bool is_horizontal = cart->GetDescription().HardwiredMirroringModeIsVertical;
-    u16 rel = addr & 0x3FF;
     if (is_horizontal)
       return (addr < 0x2800) ? (0x2000 | (addr & 0x3FF)) : (0x2800 | (addr & 0x3FF));
     else

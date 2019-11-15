@@ -3,7 +3,7 @@
 #include <memory>
 #include "core/console.h"
 
-class ImFont;
+struct ImFont;
 class Window {
 public:
   Window(std::shared_ptr<Console> console, ImFont *font)

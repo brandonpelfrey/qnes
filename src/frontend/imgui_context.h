@@ -1,7 +1,7 @@
 #pragma once
 
 struct SDL_Window;
-class ImGuiContext
+struct ImGuiContext
 {
   SDL_Window * window;
   

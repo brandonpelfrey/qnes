@@ -14,7 +14,7 @@ static MemoryEditor mem_edit_window;
 void HelperText(const char *text)
 {
   if (ImGui::IsItemHovered())
-    ImGui::SetTooltip(text);
+    ImGui::SetTooltip("%s", text);
 }
 
 CPUWindow::CPUWindow(std::shared_ptr<Console> console, ImFont *font)
@@ -216,7 +216,7 @@ void CPUWindow::render(bool embed)
         input += 2;
       }
 
-      if (sscanf(input, "%x", &address) == 1)
+      if (sscanf(input, "%hx", &address) == 1)
       {
         m_console->GetCPU()->DebuggingControls().Add(Breakpoint(address));
         address_input[0] = 0;

@@ -55,6 +55,7 @@ private:
 
   union {
     u8 PPUSTATUS;
+#pragma pack(push)
 #pragma pack(1)
     struct
     {
@@ -63,6 +64,7 @@ private:
       u8 SpriteZeroHit : 1;
       u8 VerticalBlank : 1;
     };
+#pragma pack(pop)
   };
 
   u8 OAMADDR;

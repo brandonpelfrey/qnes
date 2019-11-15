@@ -1,4 +1,4 @@
-#include "mappers/Mapper_001.h"
+#include "mappers/mapper_001.h"
 #include "core/types.h"
 
 Mapper_001::Mapper_001(CartridgeDescription description) noexcept

@@ -3,7 +3,7 @@
 #include "core/console.h"
 #include "frontend/window.h"
 
-class ImFont;
+struct ImFont;
 class CPUWindow : public Window
 {
 public:
