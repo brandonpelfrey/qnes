@@ -1,0 +1,19 @@
+name: CI - Build Test
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Install Dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y libsdl2-dev scons build-essential
+        
+    - uses: actions/checkout@v1
+      
+    - name: Build 
+      run: |
+        scons
