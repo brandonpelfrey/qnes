@@ -16,4 +16,4 @@ jobs:
       
     - name: Build 
       run: |
-        scons
+        TERM=none scons
