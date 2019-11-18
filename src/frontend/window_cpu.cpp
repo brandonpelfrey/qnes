@@ -66,15 +66,6 @@ void CPUWindow::render_registers()
 
     ImGui::SameLine();
     ImGui::Text("    PC %04X  A %02X  X %02X  Y %02X  SP %02X, P %02X", state.pc, state.a, state.x, state.y, state.s, state.p);
-
-    /*
-    u8 nmi_high, nmi_low, reset_high, reset_low;
-    m_console->GetBus()->GetCartridge()->CPURead(0xFFFA, nmi_low);
-    m_console->GetBus()->GetCartridge()->CPURead(0xFFFB, nmi_high);
-    m_console->GetBus()->GetCartridge()->CPURead(0xFFFC, reset_low);
-    m_console->GetBus()->GetCartridge()->CPURead(0xFFFD, reset_high);
-    ImGui::Text("[NMI @ $%02X%02X, RESET @ $%02X%02X]", nmi_high, nmi_low, reset_high, reset_low);
-    */
   }
 }
 
@@ -223,12 +214,14 @@ void CPUWindow::render(bool embed)
       }
     }
 
+    // In both of the following lines where we step, we step the Console so that the PPU will also advance.
+
     ImGui::SameLine();
     if (ImGui::Button("Continue"))
     {
       // HACK : Without doing a step, we would immediately pause if we're on a breakpoint right now.
       if (m_console->GetCPU()->DebuggingControls().Has(state.pc))
-        m_console->GetCPU()->Step();
+        m_console->StepCPU();
       m_console->GetCPU()->Continue();
     }
     HelperText("Exit step mode and continue execution");
@@ -237,7 +230,7 @@ void CPUWindow::render(bool embed)
     if (ImGui::Button("Step"))
     {
       m_console->GetCPU()->Pause();
-      m_console->GetCPU()->Step();
+      m_console->StepCPU();
     }
     HelperText("Step a single instruction and remain paused");
   }

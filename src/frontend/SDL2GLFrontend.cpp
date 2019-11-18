@@ -15,6 +15,7 @@
 #include "core/trace_event.h"
 
 #include "frontend/window_cpu.h"
+#include "frontend/window_ppu.h"
 #include "frontend/imgui_memory_editor.h"
 
 const float vertices[] = {
@@ -25,8 +26,6 @@ const float vertices[] = {
 GLuint vbo, vertexShader, fragmentShader, shaderProgram, vao;
 GLint status;
 GLuint shader_w, shader_h;
-
-CPUWindow *cpu_window;
 
 const char *vertexSource = R"glsl(
     #version 150 core
@@ -59,9 +58,14 @@ const char *fragmentSource = R"glsl(
 void SDL2GLFrontend::imgui()
 {
   ImGui::StyleColorsDark();
-
   imgui_context->StartImGuiFrame();
-  cpu_window->draw(false);
+
+  if (show_cpu_window)
+    cpu_window->draw(false);
+
+  if (show_ppu_window)
+    ppu_window->draw(false);
+
   imgui_context->EndImGuiFrame();
 }
 
@@ -167,10 +171,14 @@ SDL2GLFrontend::SDL2GLFrontend(std::shared_ptr<Console> console) noexcept
 
   cpu_window = new CPUWindow(console, nullptr);
   cpu_window->SetConsole(console);
+  ppu_window = new PPUWindow(console, nullptr);
+  ppu_window->SetConsole(console);
 }
 
 SDL2GLFrontend::~SDL2GLFrontend()
 {
+  delete ppu_window;
+  delete cpu_window;
   delete imgui_context;
   delete window;
 }
@@ -217,16 +225,21 @@ void SDL2GLFrontend::MainLoop()
       {
         switch (event.key.keysym.sym)
         {
-        case SDLK_s:
-          console->StepCPU();
-          break;
-
         case SDLK_ESCAPE:
           should_close = true;
+          break;
+
+        case SDLK_1:
+          show_cpu_window = !show_cpu_window;
+          break;
+
+        case SDLK_2:
+          show_ppu_window = !show_ppu_window;
           break;
         }
       }
 
+      // Handle key-presses for the controller
       for (const auto &binding : key_bindings)
         if (event.key.keysym.sym == binding.first)
         {

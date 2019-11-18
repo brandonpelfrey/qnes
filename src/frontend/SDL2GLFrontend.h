@@ -6,6 +6,9 @@
 #include "./imgui_context.h"
 
 struct SDL_Window;
+class CPUWindow;
+class PPUWindow;
+
 class SDL2GLFrontend : public Frontend
 {
 private:
@@ -14,6 +17,12 @@ private:
   u32 framebuffer_texture;
   ImGuiContext *imgui_context;
   std::shared_ptr<Console> console;
+
+  CPUWindow *cpu_window;
+  PPUWindow *ppu_window;
+
+  bool show_cpu_window;
+  bool show_ppu_window;
 
 private:
   void imgui();

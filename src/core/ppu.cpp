@@ -6,8 +6,27 @@
 
 // Palettes
 // https://wiki.nesdev.com/w/index.php/PPU_palettes
-// To get this format : hexdump -e '192/1 "0x%02x," "\n"'  PALFILE
-u8 PALETTE_BYTES[64 * 3] = {0x60, 0x60, 0x60, 0x00, 0x00, 0x78, 0x14, 0x00, 0x80, 0x2c, 0x00, 0x6e, 0x4a, 0x00, 0x4e, 0x6c, 0x00, 0x18, 0x5a, 0x03, 0x02, 0x51, 0x18, 0x00, 0x34, 0x24, 0x00, 0x00, 0x34, 0x00, 0x00, 0x32, 0x00, 0x00, 0x34, 0x20, 0x00, 0x2c, 0x78, 0x00, 0x00, 0x00, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0xc4, 0xc4, 0xc4, 0x00, 0x58, 0xde, 0x30, 0x1f, 0xfc, 0x7f, 0x14, 0xe0, 0xa8, 0x00, 0xb0, 0xc0, 0x06, 0x5c, 0xc0, 0x2b, 0x0e, 0xa6, 0x40, 0x10, 0x6f, 0x61, 0x00, 0x30, 0x80, 0x00, 0x00, 0x7c, 0x00, 0x00, 0x7c, 0x3c, 0x00, 0x6e, 0x84, 0x14, 0x14, 0x14, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0xf0, 0xf0, 0xf0, 0x4c, 0xaa, 0xff, 0x6f, 0x73, 0xf5, 0xb0, 0x70, 0xff, 0xda, 0x5a, 0xff, 0xf0, 0x60, 0xc0, 0xf8, 0x83, 0x6d, 0xd0, 0x90, 0x30, 0xd4, 0xc0, 0x30, 0x66, 0xd0, 0x00, 0x26, 0xdd, 0x1a, 0x2e, 0xc8, 0x66, 0x34, 0xc2, 0xbe, 0x54, 0x54, 0x54, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0xff, 0xff, 0xff, 0xb6, 0xda, 0xff, 0xc8, 0xca, 0xff, 0xda, 0xc2, 0xff, 0xf0, 0xbe, 0xff, 0xfc, 0xbc, 0xee, 0xff, 0xd0, 0xb4, 0xff, 0xda, 0x90, 0xec, 0xec, 0x92, 0xdc, 0xf6, 0x9e, 0xb8, 0xff, 0xa2, 0xae, 0xea, 0xbe, 0x9e, 0xef, 0xef, 0xbe, 0xbe, 0xbe, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08};
+// To get this format from a pallete file, use:
+//   hexdump -e '192/1 "0x%02x," "\n"'  PALFILE
+u8 PALETTE_BYTES[64 * 3] = {
+    0x60, 0x60, 0x60, 0x00, 0x00, 0x78, 0x14, 0x00, 0x80, 0x2c, 0x00,
+    0x6e, 0x4a, 0x00, 0x4e, 0x6c, 0x00, 0x18, 0x5a, 0x03, 0x02, 0x51,
+    0x18, 0x00, 0x34, 0x24, 0x00, 0x00, 0x34, 0x00, 0x00, 0x32, 0x00,
+    0x00, 0x34, 0x20, 0x00, 0x2c, 0x78, 0x00, 0x00, 0x00, 0x02, 0x02,
+    0x02, 0x02, 0x02, 0x02, 0xc4, 0xc4, 0xc4, 0x00, 0x58, 0xde, 0x30,
+    0x1f, 0xfc, 0x7f, 0x14, 0xe0, 0xa8, 0x00, 0xb0, 0xc0, 0x06, 0x5c,
+    0xc0, 0x2b, 0x0e, 0xa6, 0x40, 0x10, 0x6f, 0x61, 0x00, 0x30, 0x80,
+    0x00, 0x00, 0x7c, 0x00, 0x00, 0x7c, 0x3c, 0x00, 0x6e, 0x84, 0x14,
+    0x14, 0x14, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0xf0, 0xf0, 0xf0,
+    0x4c, 0xaa, 0xff, 0x6f, 0x73, 0xf5, 0xb0, 0x70, 0xff, 0xda, 0x5a,
+    0xff, 0xf0, 0x60, 0xc0, 0xf8, 0x83, 0x6d, 0xd0, 0x90, 0x30, 0xd4,
+    0xc0, 0x30, 0x66, 0xd0, 0x00, 0x26, 0xdd, 0x1a, 0x2e, 0xc8, 0x66,
+    0x34, 0xc2, 0xbe, 0x54, 0x54, 0x54, 0x06, 0x06, 0x06, 0x06, 0x06,
+    0x06, 0xff, 0xff, 0xff, 0xb6, 0xda, 0xff, 0xc8, 0xca, 0xff, 0xda,
+    0xc2, 0xff, 0xf0, 0xbe, 0xff, 0xfc, 0xbc, 0xee, 0xff, 0xd0, 0xb4,
+    0xff, 0xda, 0x90, 0xec, 0xec, 0x92, 0xdc, 0xf6, 0x9e, 0xb8, 0xff,
+    0xa2, 0xae, 0xea, 0xbe, 0x9e, 0xef, 0xef, 0xbe, 0xbe, 0xbe, 0x08,
+    0x08, 0x08, 0x08, 0x08, 0x08};
 
 // NES Framebuffer/Screen size
 const int WIDTH = 256;
@@ -36,11 +55,33 @@ PPU::PPU()
   frame_buffer.Resize(WIDTH, HEIGHT);
   pattern_left.Resize(128, 128);
   pattern_right.Resize(128, 128);
+
+  // This would ideally by 2*(256,240), but to simplify life for
+  // OpenGL, making this a power-of-two texture
+  nametables.Resize(256 * 2, 256 * 2);
 }
 
 PPU::~PPU()
 {
   delete[] vram;
+}
+
+void PPU::GetState(PPURegisterState *state)
+{
+  state->address_latch = address_latch;
+  state->nmi_latch = nmi_latch;
+
+  state->OAMADDR = OAMADDR;
+  state->vram_addr = vram_addr;
+
+  state->PPUSTATUS = PPUSTATUS;
+  state->PPUCTRL = PPUCTRL;
+  state->PPUMASK = PPUMASK;
+
+  state->scroll_x = scroll_x;
+  state->scroll_y = scroll_y;
+  state->pixel_x = pixel_x;
+  state->pixel_y = pixel_y;
 }
 
 u8 PPU::Read(u16 addr)
@@ -51,25 +92,29 @@ u8 PPU::Read(u16 addr)
   }
   else if (addr == 0x2002)
   {
-    u8 result = PPUSTATUS; //(PPUSTATUS & 0xE0) | (PPU_DATA_read_buffer & 0x1F);
+    u8 result = PPUSTATUS;
 
-    //printf("Read from PPUStatus will return %02X\n", result);
-    VerticalBlank = 0; // Clear Vertical blank on PPUStatus read.
+    // Clear Vertical blank and latches on PPUStatus read.
+    VerticalBlank = 0;
     address_latch = 0;
+
     return result;
   }
   else if (addr == 0x2007)
   {
     // Read @ vram_addr pointer
-    u8 return_value = PPU_DATA_read_buffer;
 
+    // For most values, the value returned is actually a buffer,
+    // so you'd need to read twice to get the correct value
+    u8 return_value = PPU_DATA_read_buffer;
     PPU_DATA_read_buffer = ppuRead(vram_addr & 0x3FFF);
 
+    // However, if the read is to a pallete, the data is returned immediately.
     if (vram_addr >= 0x3F00)
       return_value = PPU_DATA_read_buffer;
 
-    printf("Read PPUDATA @ 0x%04X -> 0x%02X\n", vram_addr & 0x3FFF, return_value);
-
+    // Auto-increment the internal VRAM pointer by an amount
+    // specified in PPUCTRL
     u8 addr_increment = (PPUCTRL & 0b100) ? 32 : 1;
     vram_addr = (vram_addr + addr_increment) & 0x3FFF;
     return return_value;
@@ -77,25 +122,22 @@ u8 PPU::Read(u16 addr)
   else
   {
     printf("Unimplemmented PPU read @ 0x%04X\n", addr);
-    //assert(0);
     return 0;
   }
 }
 
 void PPU::Write(u16 addr, u8 val)
 {
-  //printf("PPU WRITE() 0x%04X <- 0x%02X\n", addr, val);
-
   if (addr == 0x2000)
   {
-    /*
+    // There's a special case handled here where NMI disabled ->
+    // enabled during VBlank should immediately cause an NMI.
     bool is_0_to_1_nmigen = ((PPUCTRL & 0x80) == 0) && (val & 0x80);
     if (VerticalBlank && (nmi_latch == 0) && is_0_to_1_nmigen)
     {
       nmi_latch = 1;
       bus->TriggerNMI();
     }
-    */
 
     PPUCTRL = val;
   }
@@ -110,7 +152,7 @@ void PPU::Write(u16 addr, u8 val)
   else if (addr == 0x2004)
   {
     OAM_RAM[OAMADDR] = val;
-    OAMADDR = (OAMADDR + 1) % 64;
+    OAMADDR = (OAMADDR + 1) & 0xFF;
   }
   else if (addr == 0x2005)
   {
@@ -123,6 +165,7 @@ void PPU::Write(u16 addr, u8 val)
     {
       scroll_y = val;
       address_latch = 0;
+      // printf("[SL %d] Changed Scroll to (%d,%d)\n", pixel_y, scroll_x, scroll_y); // SMB1 debugging...
     }
   }
   else if (addr == 0x2006) // PPUADDR
@@ -146,6 +189,11 @@ void PPU::Write(u16 addr, u8 val)
     vram_addr &= 0x3FFF;
 
     /*
+    // TODO
+    // Writes to mirrored palletes' background colors
+    // are supposed to write into the first four,
+    // but for some reason this is screwing up the
+    // background colors in many places.
     if (vram_addr == 0x3F10) vram_addr = 0x3F00;
     if (vram_addr == 0x3F14) vram_addr = 0x3F04;
     if (vram_addr == 0x3F18) vram_addr = 0x3F08;
@@ -167,8 +215,6 @@ void PPU::Write(u16 addr, u8 val)
       OAM_RAM[i & 0xFF] = bus->Read(page | ((OAMADDR)&0xFF));
       OAMADDR++;
     }
-
-    // TODO : This is not-cycle accurate.
   }
   else
   {
@@ -224,9 +270,14 @@ void PPU::Clock()
       printf("scanline %d -- S0 :: %02X %02X %02X %02X --- SX/SY :: %d %d\n", pixel_y, OAM_RAM[0], OAM_RAM[1], OAM_RAM[2], OAM_RAM[3], scroll_x, scroll_y);
     }
 
-    if (pixel_y == PRE_RENDER_SCANLINE)
+    if (pixel_y == 2)
     {
       render_pattern_tables();
+      render_nametables();
+    }
+
+    if (pixel_y == PRE_RENDER_SCANLINE)
+    {
       endFrameCallBack();
     }
 
@@ -237,6 +288,84 @@ void PPU::Clock()
   }
 }
 
+void PPU::render_nametables()
+{
+  u8 *nt_data = nametables.Data();
+
+  // PPUCTRL marks whether the background tiles from from the 'left' or 'right' pattern tables.
+  const u16 bg_pattern_base = BGPatternTableAddress ? 0x1000 : 0x0000;
+
+  // We fill up the entire texture, which is comprised of data from all four nametables
+  // Because the data is arranged in chunks of 8 horizontal pixels in a row, we'll fetch
+  // data for the next 8 pixels, and draw that into our texture before going onto the
+  // next 8 pixels.
+  for (int j = 0; j < 240 * 2; j += 1)
+    for (int i = 0; i < 256 * 2; i += 8)
+    {
+      // (i,j) position within the full space of the nametables.
+
+      int nametable_tile_x = (i / 8) % 32;
+      int nametable_tile_y = (j / 8) % 30;
+
+      const u8 which_nametable = (i / 256) + 2 * (j / 240);
+      u16 nametable_start = 0x2000 + 0x400 * which_nametable;
+      u16 nt_byte_addr = nametable_start + 32 * nametable_tile_y + nametable_tile_x; //(nametable_tile_y * 32 + nametable_tile_x);
+      u16 pattern_table_index = ppuRead(nt_byte_addr);
+
+      u8 lo_bits = ppuRead(bg_pattern_base | (pattern_table_index << 4) | 0b0000 | (j & 7));
+      u8 hi_bits = ppuRead(bg_pattern_base | (pattern_table_index << 4) | 0b1000 | (j & 7));
+
+      u8 attribute_index = (nametable_tile_y / 4) * 8 + (nametable_tile_x / 4);
+      u8 attribute_byte = ppuRead(nametable_start + 0x3C0 + attribute_index);
+      u8 attribute_bits = ((i % 32) / 16) * 2 + ((j % 32) / 16) * 4;
+      u8 bg_pal_numb = (attribute_byte >> attribute_bits) & 0b11;
+
+      for (int fine_x = i; fine_x < i + 8; ++fine_x)
+      {
+        u8 lo_bit = (lo_bits >> (7 - fine_x & 7)) & 1;
+        u8 hi_bit = (hi_bits >> (7 - fine_x & 7)) & 1;
+        u8 bg_color_index = lo_bit | (hi_bit << 1);
+
+        u8 master_color_index = ppuRead(0x3F00 + 4 * bg_pal_numb + bg_color_index);
+
+        u8 r = PALETTE_BYTES[3 * master_color_index + 0];
+        u8 g = PALETTE_BYTES[3 * master_color_index + 1];
+        u8 b = PALETTE_BYTES[3 * master_color_index + 2];
+
+        // Outline the 4 screens
+        if (fine_x == 256 || j == 240)
+        {
+          r = g = b = 255;
+        }
+
+        const int pixel_num = 512 * j + fine_x;
+        nt_data[3 * pixel_num + 0] = r;
+        nt_data[3 * pixel_num + 1] = g;
+        nt_data[3 * pixel_num + 2] = b;
+      }
+    }
+
+  // Draw the window into the namespaces
+  const int ppu_scroll_x = scroll_x + ((PPUCTRL >> 0) & 1 ? 256 : 0);
+  const int ppu_scroll_y = scroll_y + ((PPUCTRL >> 1) & 1 ? 240 : 0);
+
+  for (int i = 0; i < 256; ++i)
+    for (int j = 0; j < 240; ++j)
+    {
+      bool is_border = (i == 0) || (j == 0) || (i == 255) || (j == 239);
+      if (is_border)
+      {
+        const int i_wrapped = (i + ppu_scroll_x) % (256 * 2);
+        const int j_wrapped = (j + ppu_scroll_y) % (240 * 2);
+        const int pixel_num = 512 * j_wrapped + i_wrapped;
+
+        nt_data[3 * pixel_num + 0] = 255;
+        nt_data[3 * pixel_num + 1] = 255;
+        nt_data[3 * pixel_num + 2] = 255;
+      }
+    }
+}
+
 u16 PPU::NametableMirroring(u16 addr)
 {
   if (addr >= 0x2000 && addr < 0x3F00)
@@ -245,7 +374,7 @@ u16 PPU::NametableMirroring(u16 addr)
     if (is_horizontal)
       return (addr < 0x2800) ? (0x2000 | (addr & 0x3FF)) : (0x2800 | (addr & 0x3FF));
     else
-      return addr & (~0x0800);
+      return addr & 0xF7FF;
   }
   else
     return addr;
@@ -260,8 +389,9 @@ u8 PPU::ppuRead(u16 addr)
   }
   else if (addr >= 0x0000 && addr < 0x2000)
   {
-    return vram[addr & 0x1FFF];
-    //assert(0);
+    // FIXME : This RAM doesn't really exist in the NES,
+    // but some homebrew roms expect it to be here.
+    return vram[addr];
   }
   else if (addr < 0x3F00)
   {
@@ -271,7 +401,6 @@ u8 PPU::ppuRead(u16 addr)
   {
     //Addresses $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
     u16 effective = 0x3F00 | (addr & 0x00FF);
-
     if (effective == 0x3F10 || effective == 0x3F14 || effective == 0x3F18 || effective == 0x3F1C)
       effective &= 0xFF0F;
 
@@ -345,8 +474,8 @@ void PPU::render_pixel()
   u8 master_palette_index_bg = ppuRead(0x3F00);
 
   // Get background color
-  int ppu_scroll_x = scroll_x + ((PPUCTRL >> 0) & 1 ? 256 : 0);
-  int ppu_scroll_y = scroll_y + ((PPUCTRL >> 1) & 1 ? 240 : 0);
+  int ppu_scroll_x = scroll_x + (((PPUCTRL >> 0) & 1) ? 256 : 0);
+  int ppu_scroll_y = scroll_y + (((PPUCTRL >> 1) & 1) ? 240 : 0);
 
   int nametable_x = (ppu_scroll_x + pixel_x) % 512;
   int nametable_y = (ppu_scroll_y + pixel_y) % 480;
@@ -367,7 +496,7 @@ void PPU::render_pixel()
   u8 bg_color_index = 0;
 
   // Background
-  if (ShowBackground && (ShowBGInLeftMost || (!ShowBGInLeftMost && pixel_x >= 8)))
+  if (ShowBackground && (ShowBGInLeftMost || pixel_x >= 8))
   {
     int nametable_tile_x = nametable_x / 8;
     int nametable_tile_y = nametable_y / 8;
@@ -400,8 +529,10 @@ void PPU::render_pixel()
   u8 sprite_color_index = 0;
   bool sprite_has_priority = false;
 
-  if (ShowSprites && (ShowSpritesInLeftMost || (!ShowSpritesInLeftMost && pixel_x >= 8)))
+  if (ShowSprites && (ShowSpritesInLeftMost || pixel_x >= 8))
   {
+
+#pragma pack(push)
 #pragma pack(1)
     struct SpriteData
     {
@@ -410,6 +541,7 @@ void PPU::render_pixel()
       u8 attributes;
       u8 x;
     };
+#pragma pack(pop)
 
     // For each possible sprite, compute which pixel would land here
 
@@ -427,7 +559,6 @@ void PPU::render_pixel()
       if (sprite_data->x == 0)
         continue;
 
-      // TODO : Assumes 8x8 sprites
       int sprite_pattern_x = pixel_x - sprite_data->x;
       int sprite_pattern_y = pixel_y - (sprite_data->y + 1);
 
@@ -469,14 +600,13 @@ void PPU::render_pixel()
           if (ShowBackground && ShowSprites && bg_color_index && sprite_color_index && pixel_x < 255 && sprite_i == 0)
             SpriteZeroHit = 1;
 
-          if (sprite_color_index)
+          if (sprite_color_index != 0)
             break;
         }
     }
   }
 
-  // Combine
-  // TODO
+  // Combine. Assume BG will 'win' and then look at cases where sprite would win instead.
   u8 output_color_index = master_palette_index_bg;
   if ((bg_color_index == 0 && sprite_color_index > 0) || (sprite_has_priority && sprite_color_index))
     output_color_index = master_palette_index_sprite;

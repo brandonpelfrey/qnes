@@ -4,6 +4,7 @@
 #include <functional>
 #include "core/types.h"
 #include "core/texture.h"
+#include "core/state.h"
 
 class Bus;
 class Cartridge;
@@ -76,10 +77,12 @@ private:
   Texture frame_buffer;
   Texture pattern_left;
   Texture pattern_right;
+  Texture nametables;
   std::shared_ptr<Cartridge> cart;
 
   void render_pixel();
   void render_pattern_tables();
+  void render_nametables();
 
   u16 NametableMirroring(u16 addr);
   u8 ppuRead(u16 addr);
@@ -99,6 +102,20 @@ public:
 
   Texture &GetFrameBufferTexture() { return frame_buffer; }
   Texture &GetPatternTableLeftTexture() { return pattern_left; }
+  Texture &GetPatternTableRightTexture() { return pattern_right; }
+  Texture &GetNametablesTexture() { return nametables; }
+
+  void GetState(PPURegisterState *state);
+
+  u8 *GetVRAM()
+  {
+    return vram;
+  }
+
+  u8 *GetOAMRAM()
+  {
+    return OAM_RAM;
+  }
 
   std::function<void()> endFrameCallBack;
   void SetEndFrameCallBack(std::function<void()> endFrameCallBack)
